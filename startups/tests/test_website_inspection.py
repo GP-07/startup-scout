@@ -3,7 +3,16 @@ import pytest
 
 from sources.constants import SourceKey
 from sources.models import Source
-from startups.constants import HiringSignalKind, HiringSignalMethod, InspectionStatus
+from startups.constants import (
+    CONTACT_FALLBACK_PATHS,
+    CONTACT_MAX_EXTRA_PAGES,
+    ContactFoundVia,
+    ContactRole,
+    ContactStatus,
+    HiringSignalKind,
+    HiringSignalMethod,
+    InspectionStatus,
+)
 from startups.ingestion import StartupIngestionService
 from startups.models import WebsiteInspection
 from startups.tests.fakes import FakeRedirectResolver, build_raw_startup
@@ -42,6 +51,12 @@ class FakeSite:
         return httpx.Response(404)
 
 
+def hiring_requests(site):
+    """The requests made for the hiring signal, leaving out the contact pages visited after."""
+    contact_paths = set(CONTACT_FALLBACK_PATHS)
+    return [path for path in site.requested_paths if path not in contact_paths]
+
+
 def unreachable_site(request):
     raise httpx.ConnectError("unreachable", request=request)
 
@@ -68,7 +83,7 @@ def test_signal_on_home_needs_a_single_page_request():
     assert inspection.hiring_signal_kind == HiringSignalKind.LINK_PATH
     assert inspection.hiring_signal_url == "https://acme.com/careers"
     assert inspection.inspected_at is not None
-    assert site.requested_paths == ["/robots.txt", "/"]
+    assert hiring_requests(site) == ["/robots.txt", "/"]
 
 
 def test_falls_back_to_typical_paths_when_home_has_no_signal():
@@ -79,7 +94,7 @@ def test_falls_back_to_typical_paths_when_home_has_no_signal():
     assert inspection.has_hiring_signal is True
     assert inspection.hiring_signal_method == HiringSignalMethod.PATH_PROBE
     assert inspection.hiring_signal_url == "https://acme.com/careers"
-    assert site.requested_paths == ["/robots.txt", "/", "/careers"]
+    assert hiring_requests(site) == ["/robots.txt", "/", "/careers"]
 
 
 def test_path_redirecting_to_home_is_not_a_signal():
@@ -180,7 +195,7 @@ def test_site_living_under_a_path_is_inspected_from_its_website_url():
     inspection = build_service(site).inspect(create_startup(website="https://acme.github.io/tool"))
 
     assert inspection.has_hiring_signal is True
-    assert site.requested_paths == ["/robots.txt", "/", "/tool"]
+    assert hiring_requests(site) == ["/robots.txt", "/", "/tool"]
 
 
 def test_missing_root_without_own_website_path_fails():
@@ -210,3 +225,84 @@ def test_home_metrics_are_cleared_when_the_home_cannot_be_read():
     assert inspection.home_text_length is None
     assert inspection.home_link_count is None
     assert inspection.home_has_app_root is None
+
+
+HOME_LINKING_TEAM = (
+    "<html><body><nav><a href='/team'>Team</a></nav>"
+    "<footer><a href='mailto:hello@acme.com'>Contact</a></footer></body></html>"
+)
+TEAM_PAGE = (
+    "<html><body><div><h3>Jane Roe</h3><p>CEO &amp; Co-founder</p>"
+    "<a href='https://www.linkedin.com/in/jane-roe-fictional'>in</a></div></body></html>"
+)
+
+
+def contacts_of(startup):
+    return {
+        (contact.full_name, contact.role, contact.email, contact.profile_url)
+        for contact in startup.contacts.all()
+    }
+
+
+def test_contacts_from_home_and_linked_team_page_are_saved_as_candidates():
+    startup = create_startup()
+    site = FakeSite({"/": HOME_LINKING_TEAM, "/team": TEAM_PAGE})
+
+    inspection = build_service(site).inspect(startup)
+
+    assert contacts_of(startup) == {
+        ("", ContactRole.GENERAL, "hello@acme.com", ""),
+        ("Jane Roe", ContactRole.CEO, "", "https://www.linkedin.com/in/jane-roe-fictional"),
+    }
+    jane = startup.contacts.get(full_name="Jane Roe")
+    assert jane.status == ContactStatus.CANDIDATE
+    assert jane.found_via == ContactFoundVia.WEBSITE
+    assert jane.evidence_url == "https://acme.com/team"
+    assert inspection.contacts_found == 2
+    assert "/about" not in site.requested_paths
+
+
+def test_typical_contact_paths_are_tried_when_home_links_none():
+    startup = create_startup()
+    site = FakeSite({"/": HOME_WITHOUT_SIGNAL, "/about": TEAM_PAGE})
+
+    build_service(site).inspect(startup)
+
+    assert ("Jane Roe", ContactRole.CEO, "", "https://www.linkedin.com/in/jane-roe-fictional") in (
+        contacts_of(startup)
+    )
+    assert "/contacto" in site.requested_paths
+
+
+def test_contact_pages_disallowed_by_robots_are_not_visited():
+    startup = create_startup()
+    site = FakeSite(
+        {"/": HOME_LINKING_TEAM, "/team": TEAM_PAGE}, robots="User-agent: *\nDisallow: /team\n"
+    )
+
+    build_service(site).inspect(startup)
+
+    assert "/team" not in site.requested_paths
+    assert contacts_of(startup) == {("", ContactRole.GENERAL, "hello@acme.com", "")}
+
+
+def test_inspecting_again_does_not_duplicate_or_reset_reviewed_contacts():
+    startup = create_startup()
+    site = FakeSite({"/": HOME_LINKING_TEAM, "/team": TEAM_PAGE})
+    build_service(site).inspect(startup)
+    startup.contacts.filter(full_name="Jane Roe").update(status=ContactStatus.CONFIRMED)
+
+    build_service(site).inspect(startup)
+
+    assert startup.contacts.count() == 2
+    assert startup.contacts.get(full_name="Jane Roe").status == ContactStatus.CONFIRMED
+
+
+def test_at_most_a_few_contact_pages_are_visited():
+    links = "".join(f"<a href='/team-{number}/about'>About {number}</a>" for number in range(20))
+    site = FakeSite({"/": f"<html><body>{links}</body></html>"})
+
+    build_service(site).inspect(create_startup())
+
+    visited_contact_pages = [path for path in site.requested_paths if path.endswith("/about")]
+    assert len(visited_contact_pages) == CONTACT_MAX_EXTRA_PAGES

@@ -74,7 +74,7 @@ docker compose run --rm web ruff check .
 - [x] Phase 2 — source adapters (Hacker News, manual), runner, daily huey task
 - [x] Phase 3 — hiring signal (careers / jobs section on the startup's website)
 - [x] Phase 3b — "Who is hiring?" source, hiring signal from recent posts, single-page-app metrics
-- [ ] Phase 4 — contacts from the startup's own website
+- [x] Phase 4 — contacts from the startup's own website and Hacker News authors
 - [ ] Phase 5 — web UI
 
 ## License

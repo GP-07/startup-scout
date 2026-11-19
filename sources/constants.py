@@ -28,6 +28,7 @@ SOURCE_RUN_LOCK_PREFIX = "source-run"
 # Hacker News, through the public Algolia API.
 HACKER_NEWS_SEARCH_URL = "https://hn.algolia.com/api/v1/search_by_date"
 HACKER_NEWS_ITEM_URL = "https://news.ycombinator.com/item?id={item_id}"
+HACKER_NEWS_USER_URL = "https://news.ycombinator.com/user?id={author}"
 HACKER_NEWS_PAGE_SIZE = 100
 HACKER_NEWS_INITIAL_LOOKBACK_DAYS = 7
 HACKER_NEWS_DESCRIPTION_MAX_LENGTH = 500
@@ -66,8 +67,6 @@ HACKER_NEWS_HIRING_HEADER_SEPARATOR = "|"
 HTML_PARAGRAPH_PATTERN = re.compile(r"<p>", re.IGNORECASE)
 PARENTHESIZED_TEXT_PATTERN = re.compile(r"\([^)]*\)")
 EMAIL_ADDRESS_PATTERN = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
-# Shortest company name prefix compared with a domain label ("acme" in `acmehq.com`).
-COMPANY_NAME_MATCH_MIN_LENGTH = 3
 DEFAULT_WEBSITE_SCHEME = "https://"
 # Mailbox providers: an address there says nothing about the company's own domain.
 FREE_EMAIL_DOMAINS = frozenset(

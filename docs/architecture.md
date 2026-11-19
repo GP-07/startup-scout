@@ -42,6 +42,8 @@ startup-scout/
 │   ├── ingestion.py        StartupIngestionService: dedupe + merge + concurrencia
 │   ├── querysets.py        StartupQuerySet.with_hiring_signal(): señal por web o por aviso
 │   ├── hiring_signal.py    Detección de búsquedas abiertas en un HTML (funciones puras)
+│   ├── contact_extraction.py  Contactos en un HTML: mailto, LinkedIn, JSON-LD, cargos (funciones puras)
+│   ├── contacts.py         save_contacts: guarda candidatos sin duplicar ni pisar lo revisado
 │   ├── page_metrics.py     Métricas de la home y regla de "probable SPA vacía"
 │   ├── inspection_stats.py Cuántas inspecciones sin señal son probables SPA vacías
 │   ├── website_inspection.py  WebsiteInspectionService: visita la web, robots.txt, fallback
@@ -94,7 +96,7 @@ Una fila por cada vez que corre una fuente: estado (`running`, `succeeded`, `fai
 
 ### 2.4 `RawStartup` y `SourceAdapter` (`adapters/base.py`)
 
-- **`RawStartup`**: dataclass inmutable con lo que reporta una fuente, ya mapeado a nuestros nombres de campo. `country` llega como código ISO 3166-1 alfa-2 (`ES`), y la conversión es responsabilidad del adaptador. `published_at` es la fecha de publicación en la fuente, opcional. `mergeable_data()` devuelve los campos que entran al merge.
+- **`RawStartup`**: dataclass inmutable con lo que reporta una fuente, ya mapeado a nuestros nombres de campo. `country` llega como código ISO 3166-1 alfa-2 (`ES`), y la conversión es responsabilidad del adaptador. `published_at` es la fecha de publicación en la fuente, opcional. `contacts` son las personas que la fuente misma señala (el autor del post), como `ContactCandidate`. `mergeable_data()` devuelve los campos que entran al merge.
 - **`SourceFetchResult`**: lo que devuelve una corrida de un adaptador: la lista de `RawStartup` y el `cursor` desde el que tiene que arrancar la próxima.
 - **`SourceAdapter`**: el puerto (ports & adapters). Cada fuente implementa `fetch_candidates(cursor)`, que recibe `{}` en la primera corrida, y devuelve un `SourceFetchResult`. Recibe su `config` desde la fila `Source` y, opcionalmente, un `httpx.Client`; si no se le pasa, lo crea recién cuando lo necesita. En los tests se le inyecta uno con `MockTransport`. `runs_periodically` indica si el descubrimiento diario la corre. Un adaptador solo sabe leer su fuente: no deduplica ni guarda nada. Si no puede leerla, lanza `SourceFetchError`.
 
@@ -114,7 +116,7 @@ Lee posts de la API pública de Algolia (`search_by_date`), sin autenticación.
   - `name` es el título sin el prefijo, hasta el primer separador (` – `, ` — `, ` - `, `, ` o `: `) y sin el batch de YC (`(YC F26)`). Si el título no tiene separador, el nombre es el título completo, y eso pasa bastante en Show HN.
   - `description` es la frase después del separador. Si no hay, se usa el texto del post en texto plano, hasta 500 caracteres.
   - `website` es el link del post si es un dominio propio. Si es una plataforma (GitHub, App Store, YouTube…), se usa el primer dominio propio que aparezca linkeado en el texto. Si no hay ninguno, se deja el link a la plataforma, que no identifica a la startup (ver §3.6).
-  - `raw_payload` es el hit completo, sin `_highlightResult`. Incluye `author`, que en la fase 4 será el candidato a contacto.
+  - `raw_payload` es el hit completo, sin `_highlightResult`. Incluye `author`. El autor también va en `contacts`, como candidato con rol `founder` y link a su perfil de HN: quien publica un Show HN o un Launch HN suele ser el founder.
 
 ### 2.7 `HackerNewsHiringAdapter` (`adapters/hacker_news_hiring.py`)
 
@@ -125,7 +127,9 @@ Lee los avisos del hilo mensual "Ask HN: Who is hiring?", que publica el usuario
 - **Cursor**: el `created_at_i` del comentario más nuevo, con la misma hora de solapamiento que §2.6. Mientras un hilo tenga menos de 45 días se sigue leyendo, así los avisos que llegan a mitad de mes no se pierden.
 - **Mapeo a `RawStartup`**: `name` sale del primer segmento del encabezado sin paréntesis; `description` es el encabezado completo; `website` sigue el orden coincidencia con el nombre → link en el encabezado → dominio de un mail que no sea de un proveedor de correo (`FREE_EMAIL_DOMAINS`); `published_at` es la fecha del comentario y `raw_payload` el comentario entero, con su `author`. Si no hay encabezado o no hay web propia, el aviso se descarta y se cuenta en el log.
 
-`algolia.py` y `html_text.py` tienen lo que comparten los dos adaptadores de HN: la paginación de Algolia (que lanza `SourceFetchError` si la API falla), el texto plano, los links y `identifying_domain(url)`.
+El autor del aviso va en `contacts` con rol `other`: los avisos los escriben tanto founders como recruiters.
+
+`algolia.py` y `html_text.py` tienen lo que comparten los dos adaptadores de HN: la paginación de Algolia (que lanza `SourceFetchError` si la API falla), el texto plano, los links, `identifying_domain(url)` y `author_contact`, que arma el contacto del autor.
 
 ### 2.8 `ManualSourceAdapter` (`adapters/manual.py`)
 
@@ -175,7 +179,7 @@ La startup **unificada**: una sola fila por startup real, venga de las fuentes q
 
 ### 3.3 `Contact` (modelo)
 
-Personas o canales para contactar a la startup: CEO, CTO, founder, otro cargo o un contacto general como `hello@`. Registra cómo se encontró (`found_via`: la fuente, la web de la startup o carga manual), la URL donde aparece (`evidence_url`) y su estado (`candidate`, `confirmed` o `rejected`). Los candidatos se confirman a mano. _El modelo existe; la extracción desde la web de la startup llega en la fase 4._
+Personas o canales para contactar a la startup: CEO, CTO, founder, otro cargo o un contacto general como `hello@`. Registra cómo se encontró (`found_via`: la fuente, la web de la startup o carga manual), la URL donde aparece (`evidence_url`) y su estado (`candidate`, `confirmed` o `rejected`). Los candidatos se confirman a mano. Los cargan la inspección de la web (§3.13) y las fuentes (el autor del post de HN), siempre con `contacts.save_contacts`, que no duplica ni deshace lo que ya revisé.
 
 ### 3.4 `Analysis` (modelo)
 
@@ -224,7 +228,7 @@ El resultado de visitar la web propia de una startup. Hay uno por startup (`OneT
 | `home_text_length`, `home_link_count`, `home_has_app_root` | Lo que muestra la home sin JavaScript: largo del texto visible, cantidad de links y si tiene un contenedor de framework. Nulos si la home no se pudo leer. Sirven para medir las SPA vacías (§3.12) |
 | `error` | El error, si la inspección falló |
 
-En la fase 4 este mismo modelo va a sumar los contactos encontrados en la misma visita.
+`contacts_found` cuenta los contactos encontrados en la última visita; los contactos mismos se guardan en `Contact` (§3.13).
 
 ### 3.11 Búsquedas abiertas: `hiring_signal.py`, `website_inspection.py` y `tasks.py`
 
@@ -249,6 +253,20 @@ En la fase 4 este mismo modelo va a sumar los contactos encontrados en la misma 
 - **`page_metrics.py`**: `measure_page(html)` mide la home y `is_probable_spa_shell(metrics)` aplica la regla: menos de `SPA_SHELL_MAX_TEXT_LENGTH` (200) caracteres visibles, o un contenedor de framework (`APP_ROOT_ELEMENT_IDS`) con menos de `SPA_SHELL_MIN_LINK_COUNT` (3) links. Son umbrales para revisar a mano, no una certeza.
 - **`inspection_stats.spa_shell_stats()`**: entre las inspecciones `done` sin señal, cuenta las que todavía no tienen métricas (inspeccionadas antes de que existieran) y devuelve las probables SPA vacías.
 
+### 3.13 Contactos: `contact_extraction.py` y `contacts.py`
+
+- **`contact_extraction.py`**: funciones **puras**. `extract_contacts(html, page_url)` devuelve los `ContactCandidate` de la página, ya unificados (misma persona = mismo mail, mismo perfil o mismo nombre; gana el rol más fuerte: CEO, CTO, founder, otro, general):
+  - **Mails** en links `mailto:` o en el texto visible, **solo del dominio de la startup**. Los buzones genéricos (`hello@`, `info@`, `contact@`…, `GENERAL_EMAIL_LOCAL_PARTS`) son contacto general; los de búsquedas (`jobs@`, `careers@`) se ignoran; el resto es una persona con rol "otro", con nombre si el texto del link lo es.
+  - **Perfiles de LinkedIn** (`linkedin.com/in/…`): solo la URL, LinkedIn nunca se visita. Las páginas de empresa (`/company/`) no son contactos.
+  - **JSON-LD** de schema.org: cada `Person` con un `jobTitle` de CEO, CTO o founder, o que esté bajo `founder`. Toma también su mail y su LinkedIn de `sameAs`.
+  - **Nombres junto a cargos**: una línea corta con un cargo ("CEO & Co-founder", "Cofundadora") toma como nombre el fragmento de texto anterior que parezca un nombre (2 a 4 palabras con mayúscula, sin palabras de cargos, lugares o etiquetas como "General Counsel" o "San Francisco"), como en las tarjetas de equipo. También "Jane Roe, Founder" en una sola línea. Si la tarjeta tiene un único link a LinkedIn, se suma como perfil. Los cargos se reconocen por palabra completa: "Our Founders" o "for CTOs" no son personas.
+  - **Testimonios, clientes e inversores no son el equipo.** La primera corrida real puso al CEO de Datadog como CEO de Railway: era una cita de un cliente. Por eso se descarta a una persona si su cargo nombra a otra empresa ("CEO at Globex", "CTO, Globex", o "Co-founder" "at" "Globex" en fragmentos separados) que no coincide con el dominio de la startup; si está bajo un título de sección como "Backed by", "Investors", "Advisors" o "What our customers say" (`NON_TEAM_SECTION_PHRASES`); o, en JSON-LD, si no está bajo `founder`, `employee` o `member` (los autores de reseñas quedan afuera) o su `worksFor` es otra empresa.
+
+  `contact_page_links(html, page_url)` da los links de la home a páginas del mismo sitio cuyo último segmento es `about`, `team`, `contact`, `nosotros`, `equipo`… (`CONTACT_PAGE_SLUGS`).
+- **En la inspección** (`WebsiteInspectionService._collect_contacts`): después de la señal de búsquedas, extrae de la home y de las páginas de contacto que linkea. Si no linkea ninguna, prueba `CONTACT_FALLBACK_PATHS` (`/about`, `/about-us`, `/team`, `/contact`, `/nosotros`, `/equipo`, `/quienes-somos`, `/contacto`). Como máximo 8 páginas además de la home, respetando robots.txt, y descartando las que redirigen a la home o devuelven el mismo HTML (SPA).
+- **`contacts.save_contacts(startup, candidates, found_via)`**: crea los candidatos nuevos con estado `candidate`. Si el contacto ya existe en esa startup (mismo mail, perfil o nombre, sin importar cómo se encontró), solo completa sus campos vacíos: no cambia nombre, rol ni estado, así una nueva inspección no deshace lo que confirmé o rechacé.
+- **Migración `startups/0005`**: crea los contactos de los autores de HN de los registros ya cargados, a partir del `author` del payload.
+
 ## 4. Configuración relevante
 
 | Setting / constante | Dónde | Para qué |
@@ -262,6 +280,7 @@ En la fase 4 este mismo modelo va a sumar los contactos encontrados en la misma 
 | `INSPECTION_TIMEOUT_SECONDS`, `INSPECTION_USER_AGENT` | `startups/constants.py` | Timeout (10 s) y User-Agent identificable (`startup-scout/0.1`) de la inspección |
 | `HIRING_POST_MAX_AGE_DAYS` | `startups/constants.py` | Cuánto dura la señal de un aviso en "Who is hiring?" (60 días) |
 | `SPA_SHELL_*`, `APP_ROOT_ELEMENT_IDS` | `startups/constants.py` | Regla de "probable SPA vacía" |
+| `CONTACT_*`, `GENERAL_EMAIL_LOCAL_PARTS`, `ROLE_TITLE_PHRASES`, `PERSON_NAME_*` | `startups/constants.py` | Páginas de contacto, buzones genéricos, cargos y qué parece un nombre |
 | `HACKER_NEWS_HIRING_*`, `FREE_EMAIL_DOMAINS` | `sources/constants.py` | Hilos de "Who is hiring?", ventana de relectura y proveedores de correo que no sirven como web |
 
 ## 5. Proceso / pipeline
@@ -288,7 +307,7 @@ flowchart TD
 | `get_adapter` / registro | **Implementado** |
 | Ingesta: dedupe, merge y concurrencia | **Implementado (fase 1)** |
 | Señal de búsquedas abiertas | **Implementado (fase 3)** |
-| Extracción de contactos | Pendiente (fase 4) |
+| Extracción de contactos | **Implementado (fase 4)** |
 | Web: listado, ficha, análisis, estados | Pendiente (fase 5) |
 
 ### 5.2 Ingesta de una startup (implementado)
@@ -393,7 +412,19 @@ De las 14 señales finales, 11 son búsquedas reales: links a `/careers`, a la p
 
 **Sobre las startups de "Who is hiring?"**, que sabemos que están contratando, la inspección de la web encontró la señal en **106 de 151** inspeccionadas (~70 %). Es una medida de cuánto detecta la inspección cuando la búsqueda existe. Con las dos fuentes, el admin muestra **168 startups con señal** de 527, contra 14 antes.
 
-Primera medición de SPA (`inspect_websites --stats`), solo sobre las inspecciones que ya tienen métricas: 13 probables SPA vacías. Las 230 inspecciones anteriores no tienen métricas todavía; se miden con `inspect_websites --all`.
+**Contactos (fase 4, 2026-11-19)**: `inspect_websites --all` sobre 413 startups con dominio propio tardó ~17 minutos (antes ~1 s por sitio, ahora ~2,5 s, por las páginas de contacto; las visitas son en serie). Resultado, después de corregir los testimonios:
+
+| | Cantidad |
+|---|---|
+| Startups con algún contacto de su web | 197 |
+| Startups con una persona CEO, CTO o founder | 88 |
+| Startups con un mail general (`hello@`, `info@`…) | 101 |
+| Contactos de la web: CEO / CTO / founder / otro / general | 59 / 31 / 59 / 714 / 113 |
+| Contactos de autores de HN (todas las startups de HN) | 528 |
+
+Los "otro" son sobre todo perfiles de LinkedIn de páginas de equipo completas. Revisando la lista de personas a mano, la gran mayoría son el equipo real. Quedan errores sueltos, como una frase tomada por nombre ("Executive Resilience") o algún testimonio que no nombra a su empresa. Por eso todo entra como candidato a confirmar.
+
+Medición de SPA (`inspect_websites --stats`, después de reinspeccionar todo): de 273 inspecciones `done` sin señal, **43 son probables SPA vacías**. Esa es la lista a revisar a mano en el navegador para decidir si vale la pena un navegador headless.
 
 
 ### 5.5 Estados de una startup
@@ -436,6 +467,8 @@ Cada app tiene sus tests en `<app>/tests/`, con sus propios fakes:
 | `startups/tests/test_hiring_signal.py` | Cada tipo de señal con HTML ficticio: link en el footer, texto de link, plataformas, sección de empleos de LinkedIn y YC, frase, mail; "Join us on Discord" y la waitlist no cuentan; palabra suelta ("Steve Jobs"); path de otro sitio; rutas de documentación; scripts ignorados; prioridad entre señales |
 | `startups/tests/test_website_inspection.py` | La home sola con un request; fallback por ruta; redirect a la home, mismo HTML que la home y página sin palabras no cuentan; robots.txt que bloquea todo o una ruta; robots.txt inexistente; sitio caído; sitio bajo un path (GitHub Pages); startup sin dominio propio; re-inspección |
 | `startups/tests/test_domain_cleanup.py` | Un dominio de plataforma se borra junto con su inspección; un host compartido se reemplaza por el subdominio de la startup; los dominios propios no se tocan; el alias propio pasa a principal |
+| `startups/tests/test_contact_extraction.py` | Mails del sitio, genéricos y personales; mails de otros dominios y de búsquedas ignorados; tarjetas de equipo con cargo y LinkedIn; nombre y cargo en una línea; palabras de cargo sin persona; JSON-LD; LinkedIn suelto y de empresa; unificación; cargos; links a páginas de contacto |
+| `startups/tests/test_contacts.py` | Alta de candidatos con evidencia; un contacto conocido solo completa campos vacíos y conserva su estado; no se mezclan startups |
 | `startups/tests/test_hiring_status.py` | Señal por aviso reciente, aviso viejo, aviso de otra fuente, señal de la web, las dos; filtro y orden del admin |
 | `startups/tests/test_page_metrics.py` | Texto visible, links y contenedores de framework; regla de probable SPA vacía |
 | `startups/tests/test_inspection_stats.py` | Conteo de probables SPA vacías y de inspecciones sin métricas; `inspect_websites --stats` no inspecciona |

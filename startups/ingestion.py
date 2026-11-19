@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from django.db import IntegrityError, transaction
 
 from sources.models import SourceRecord
-from startups.constants import MAX_INGESTION_ATTEMPTS
+from startups.constants import MAX_INGESTION_ATTEMPTS, ContactFoundVia
+from startups.contacts import save_contacts
 from startups.domains import is_identifying_domain, normalize_domain, normalize_name
 from startups.exceptions import IngestionConflictError, InvalidWebsiteError
 from startups.merge import recompute_startup
@@ -83,6 +84,7 @@ class StartupIngestionService:
         if existing_record is not None:
             self._update_record(existing_record, raw_startup)
             self._attach_domains(existing_record.startup, domains)
+            save_contacts(existing_record.startup, raw_startup.contacts, ContactFoundVia.SOURCE)
             startup = recompute_startup(existing_record.startup)
             return IngestionResult(startup=startup, created=False, record_created=False)
 
@@ -100,6 +102,7 @@ class StartupIngestionService:
             payload=raw_startup.raw_payload,
             published_at=raw_startup.published_at,
         )
+        save_contacts(startup, raw_startup.contacts, ContactFoundVia.SOURCE)
         startup = recompute_startup(startup)
         return IngestionResult(startup=startup, created=created, record_created=True)
 

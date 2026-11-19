@@ -7,6 +7,7 @@ import pytest
 
 from sources.adapters.hacker_news_hiring import HackerNewsHiringAdapter
 from sources.exceptions import SourceFetchError
+from startups.constants import ContactRole
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 THREADS_FIXTURE = json.loads((FIXTURES_DIR / "hacker_news_hiring_threads.json").read_text())
@@ -60,6 +61,10 @@ def test_post_header_gives_name_description_and_link_to_the_comment():
     assert lumbre.published_at == datetime.fromtimestamp(1793635500, tz=UTC)
     assert lumbre.raw_payload["author"] == "fictional_recruiter_1"
     assert "_highlightResult" not in lumbre.raw_payload
+    [author] = lumbre.contacts
+    assert author.role == ContactRole.OTHER
+    assert author.profile_url == "https://news.ycombinator.com/user?id=fictional_recruiter_1"
+    assert author.evidence_url == "https://news.ycombinator.com/item?id=9100001"
 
 
 def test_website_is_the_link_matching_the_company_name_not_the_job_board():

@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 import tldextract
 
 from startups.constants import (
+    COMPANY_NAME_MATCH_MIN_LENGTH,
     DEFAULT_URL_SCHEME,
     LEGAL_NAME_SUFFIXES,
     NON_ALPHANUMERIC_PATTERN,
@@ -90,3 +91,18 @@ def _extract_hostname(website):
 
 def _with_scheme(value):
     return value if URL_SCHEME_PATTERN.match(value) else f"{DEFAULT_URL_SCHEME}{value}"
+
+
+def domain_matches_name(domain, name):
+    """Whether a domain belongs to a company name: `lumbrelabs.com` and "Lumbre Labs"."""
+    domain_label = domain.split(".")[0].replace("-", "")
+    name_words = normalize_name(name).split()
+    if not name_words:
+        return False
+    joined_name = "".join(name_words)
+    first_word = name_words[0]
+    return (
+        domain_label == joined_name
+        or (len(first_word) >= COMPANY_NAME_MATCH_MIN_LENGTH and first_word in domain_label)
+        or (len(domain_label) >= COMPANY_NAME_MATCH_MIN_LENGTH and domain_label in joined_name)
+    )

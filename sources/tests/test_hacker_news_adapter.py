@@ -7,6 +7,8 @@ import pytest
 
 from sources.adapters.hacker_news import HackerNewsAdapter
 from sources.exceptions import SourceFetchError
+from startups.constants import ContactRole
+from startups.contact_extraction import ContactCandidate
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SHOW_HN_FIXTURE = json.loads((FIXTURES_DIR / "hacker_news_show_hn.json").read_text())
@@ -52,6 +54,15 @@ def test_show_hn_post_uses_post_url_as_website_and_title_as_name():
     assert "_highlightResult" not in lumbre.raw_payload
     assert lumbre.raw_payload["author"] == "fictional_founder_1"
     assert lumbre.published_at == datetime.fromtimestamp(1795075200, tz=UTC)
+    assert lumbre.contacts == (
+        ContactCandidate(
+            full_name="",
+            role=ContactRole.FOUNDER,
+            email="",
+            profile_url="https://news.ycombinator.com/user?id=fictional_founder_1",
+            evidence_url="https://news.ycombinator.com/item?id=9000001",
+        ),
+    )
 
 
 def test_repository_link_is_replaced_by_own_domain_found_in_post_text():

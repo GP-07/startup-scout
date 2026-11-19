@@ -1,9 +1,12 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from sources.constants import SourceKey
 from sources.models import Source, SourceRecord
+from startups.constants import ContactFoundVia, ContactRole
+from startups.contact_extraction import ContactCandidate
 from startups.ingestion import StartupIngestionService
 from startups.models import Startup, StartupDomain
 from startups.tests.fakes import FakeRedirectResolver, build_raw_startup
@@ -222,6 +225,24 @@ def test_redirect_to_platform_is_not_used_as_alias():
     ).startup
 
     assert list(startup.domains.values_list("domain", flat=True)) == ["acme.com"]
+
+
+def test_contacts_reported_by_the_source_are_saved_once():
+    author = ContactCandidate(
+        "", ContactRole.FOUNDER, "", "https://news.ycombinator.com/user?id=jane", "https://hn/1"
+    )
+    raw_startup = replace(
+        build_raw_startup("hn-1", "Acme", website="https://acme.com"), contacts=(author,)
+    )
+    service = build_service()
+
+    service.ingest(get_source(SourceKey.HACKER_NEWS), raw_startup)
+    result = service.ingest(get_source(SourceKey.HACKER_NEWS), raw_startup)
+
+    contact = result.startup.contacts.get()
+    assert contact.profile_url == "https://news.ycombinator.com/user?id=jane"
+    assert contact.found_via == ContactFoundVia.SOURCE
+    assert contact.role == ContactRole.FOUNDER
 
 
 def test_source_record_keeps_when_the_source_published_it():

@@ -1,7 +1,9 @@
-"""Visits a startup's own website to find signs of open positions.
+"""Visits a startup's own website to find signs of open positions and contacts.
 
-Strategy (docs/startup-scout-design.md §3): the home page first, which usually settles it with a
-single request; typical paths (/careers, /jobs...) only as a fallback. robots.txt is respected.
+Hiring (docs/startup-scout-design.md §3): the home page first, which usually settles it with a
+single request; typical paths (/careers, /jobs...) only as a fallback.
+Contacts (§5): the home plus the about, team and contact pages it links to, or typical paths of
+those pages when it links none. robots.txt is respected throughout.
 """
 
 import logging
@@ -13,6 +15,8 @@ from bs4 import BeautifulSoup
 from django.utils import timezone
 
 from startups.constants import (
+    CONTACT_FALLBACK_PATHS,
+    CONTACT_MAX_EXTRA_PAGES,
     DEFAULT_URL_SCHEME,
     HIRING_FALLBACK_PATHS,
     HIRING_SIGNAL_TEXT_MAX_LENGTH,
@@ -27,10 +31,13 @@ from startups.constants import (
     ROBOTS_TXT_PATH,
     ROBOTS_USER_AGENT_TOKEN,
     URL_SCHEME_PATTERN,
+    ContactFoundVia,
     HiringSignalKind,
     HiringSignalMethod,
     InspectionStatus,
 )
+from startups.contact_extraction import contact_page_links, extract_contacts, merge_contacts
+from startups.contacts import save_contacts
 from startups.domains import normalize_domain
 from startups.exceptions import InvalidWebsiteError
 from startups.hiring_signal import (
@@ -93,24 +100,19 @@ class WebsiteInspectionService:
             return self._save(inspection, InspectionStatus.FAILED, error=str(error))
 
         home_html = _html_of(home_response)
-        home_metrics = measure_page(home_html)
         signal = detect_hiring_signal(home_html, str(home_response.url))
-        if signal is not None:
-            return self._save(
-                inspection,
-                InspectionStatus.DONE,
-                signal=signal,
-                method=HiringSignalMethod.HOME,
-                home_metrics=home_metrics,
-            )
-        signal = self._probe_typical_paths(home_response, home_html, robots)
-        method = HiringSignalMethod.PATH_PROBE if signal else ""
+        method = HiringSignalMethod.HOME if signal else ""
+        if signal is None:
+            signal = self._probe_typical_paths(home_response, home_html, robots)
+            method = HiringSignalMethod.PATH_PROBE if signal else ""
+        contacts_found = self._collect_contacts(startup, home_response, home_html, robots)
         return self._save(
             inspection,
             InspectionStatus.DONE,
             signal=signal,
             method=method,
-            home_metrics=home_metrics,
+            home_metrics=measure_page(home_html),
+            contacts_found=contacts_found,
         )
 
     def _get_website_page(self, startup, domain, robots):
@@ -162,7 +164,39 @@ class WebsiteInspectionService:
                 )
         return None
 
-    def _save(self, inspection, status, signal=None, method="", error="", home_metrics=None):
+    def _collect_contacts(self, startup, home_response, home_html, robots):
+        """Find contacts on the home and on its contact pages; return how many were found."""
+        home_url = str(home_response.url)
+        site_root = _site_root(home_url)
+        home_text = visible_text(home_html)
+        candidates = list(extract_contacts(home_html, home_url))
+        page_urls = contact_page_links(home_html, home_url) or [
+            site_root + path for path in CONTACT_FALLBACK_PATHS
+        ]
+        for page_url in page_urls[:CONTACT_MAX_EXTRA_PAGES]:
+            if not robots.can_fetch(ROBOTS_USER_AGENT_TOKEN, page_url):
+                continue
+            try:
+                response = self.http_client.get(page_url)
+            except httpx.HTTPError as error:
+                logger.info("Could not read %s: %s", page_url, error)
+                continue
+            if _is_own_page(response, site_root, home_text):
+                candidates.extend(extract_contacts(_html_of(response), str(response.url)))
+        contacts = merge_contacts(candidates)
+        save_contacts(startup, contacts, ContactFoundVia.WEBSITE)
+        return len(contacts)
+
+    def _save(
+        self,
+        inspection,
+        status,
+        signal=None,
+        method="",
+        error="",
+        home_metrics=None,
+        contacts_found=0,
+    ):
         inspection.status = status
         inspection.inspected_at = timezone.now()
         inspection.has_hiring_signal = signal is not None
@@ -175,6 +209,7 @@ class WebsiteInspectionService:
         inspection.home_text_length = home_metrics.text_length if home_metrics else None
         inspection.home_link_count = home_metrics.link_count if home_metrics else None
         inspection.home_has_app_root = home_metrics.has_app_root if home_metrics else None
+        inspection.contacts_found = contacts_found
         inspection.error = error
         inspection.save()
         return inspection
@@ -182,15 +217,19 @@ class WebsiteInspectionService:
 
 def _is_hiring_page(response, site_root, home_text):
     """A probed path counts only if it is a real page of its own with hiring words."""
+    return _is_own_page(response, site_root, home_text) and has_hiring_keywords(_html_of(response))
+
+
+def _is_own_page(response, site_root, home_text):
+    """A page of the site other than the home, not a redirect to it nor the same SPA shell."""
     if response.status_code != HTTP_OK:
         return False
     final_url = urlsplit(str(response.url))
     if _site_root(str(response.url)) != site_root or final_url.path in HOME_PATHS:
         return False  # Redirected to the home page or to another site.
     page_html = _html_of(response)
-    if not page_html or visible_text(page_html) == home_text:
-        return False  # Single-page apps serve the same shell for every path.
-    return has_hiring_keywords(page_html)
+    # Single-page apps serve the same shell for every path.
+    return bool(page_html) and visible_text(page_html) != home_text
 
 
 def _html_of(response):

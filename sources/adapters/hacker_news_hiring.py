@@ -7,13 +7,13 @@ from django.utils import timezone
 from sources.adapters.algolia import created_after_filter, fetch_algolia_hits
 from sources.adapters.base import RawStartup, SourceAdapter, SourceFetchResult
 from sources.adapters.html_text import (
+    author_contact,
     extract_links,
     identifying_domain,
     plain_text,
     timestamp_to_datetime,
 )
 from sources.constants import (
-    COMPANY_NAME_MATCH_MIN_LENGTH,
     DEFAULT_WEBSITE_SCHEME,
     EMAIL_ADDRESS_PATTERN,
     FREE_EMAIL_DOMAINS,
@@ -32,7 +32,8 @@ from sources.constants import (
     PARENTHESIZED_TEXT_PATTERN,
     WHITESPACE_PATTERN,
 )
-from startups.domains import normalize_name
+from startups.constants import ContactRole
+from startups.domains import domain_matches_name
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +116,16 @@ def _to_raw_startup(comment):
     website = _choose_website(name, comment_html, header_html)
     if not name or not website:
         return None
+    comment_url = HACKER_NEWS_ITEM_URL.format(item_id=comment["objectID"])
     return RawStartup(
         external_id=str(comment["objectID"]),
-        url=HACKER_NEWS_ITEM_URL.format(item_id=comment["objectID"]),
+        url=comment_url,
         name=name,
         website=website,
         description=header[:HACKER_NEWS_DESCRIPTION_MAX_LENGTH],
         published_at=timestamp_to_datetime(comment.get("created_at_i")),
+        # Job posts are written by founders as often as by recruiters: no role is assumed.
+        contacts=author_contact(comment.get("author"), ContactRole.OTHER, comment_url),
         raw_payload={
             key: value
             for key, value in comment.items()
@@ -149,7 +153,7 @@ def _choose_website(name, comment_html, header_html):
     """
     own_links = [link for link in extract_links(comment_html) if identifying_domain(link)]
     for link in own_links:
-        if _matches_company_name(identifying_domain(link), name):
+        if domain_matches_name(identifying_domain(link), name):
             return link
     for link in extract_links(header_html):
         if identifying_domain(link):
@@ -162,21 +166,6 @@ def _choose_website(name, comment_html, header_html):
         if domain:
             return DEFAULT_WEBSITE_SCHEME + domain
     return None
-
-
-def _matches_company_name(domain, name):
-    """`lumbrelabs.com` matches "Lumbre Labs"; `acmehq.com` matches "Acme"."""
-    domain_label = domain.split(".")[0].replace("-", "")
-    name_words = normalize_name(name).split()
-    if not name_words:
-        return False
-    joined_name = "".join(name_words)
-    first_word = name_words[0]
-    return (
-        domain_label == joined_name
-        or (len(first_word) >= COMPANY_NAME_MATCH_MIN_LENGTH and first_word in domain_label)
-        or (len(domain_label) >= COMPANY_NAME_MATCH_MIN_LENGTH and domain_label in joined_name)
-    )
 
 
 def _created_at(hit):

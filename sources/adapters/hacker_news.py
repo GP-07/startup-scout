@@ -6,6 +6,7 @@ from django.utils import timezone
 from sources.adapters.algolia import created_after_filter, fetch_algolia_hits
 from sources.adapters.base import RawStartup, SourceAdapter, SourceFetchResult
 from sources.adapters.html_text import (
+    author_contact,
     extract_links,
     identifying_domain,
     plain_text,
@@ -23,6 +24,7 @@ from sources.constants import (
     YC_BATCH_PATTERN,
 )
 from sources.exceptions import SourceFetchError
+from startups.constants import ContactRole
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +72,16 @@ class HackerNewsAdapter(SourceAdapter):
         title_without_prefix = hit["title"][len(title_prefix) :].strip()
         name, tagline = _split_title(title_without_prefix)
         story_text = hit.get("story_text") or ""
+        post_url = HACKER_NEWS_ITEM_URL.format(item_id=hit["objectID"])
         return RawStartup(
             external_id=str(hit["objectID"]),
-            url=HACKER_NEWS_ITEM_URL.format(item_id=hit["objectID"]),
+            url=post_url,
             name=YC_BATCH_PATTERN.sub("", name),
             website=_choose_website(hit.get("url") or "", story_text),
             description=tagline or plain_text(story_text)[:HACKER_NEWS_DESCRIPTION_MAX_LENGTH],
             published_at=timestamp_to_datetime(hit.get("created_at_i")),
+            # Whoever posts a Show HN or Launch HN is usually its founder.
+            contacts=author_contact(hit.get("author"), ContactRole.FOUNDER, post_url),
             raw_payload={
                 key: value
                 for key, value in hit.items()

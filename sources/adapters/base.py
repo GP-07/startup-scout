@@ -13,6 +13,7 @@ class RawStartup:
 
     `country` is an ISO 3166-1 alpha-2 code; adapters are responsible for converting it.
     `published_at` is when the source published it (a post, a comment), if the source says.
+    `contacts` are the people the source itself points to, such as the author of a post.
     """
 
     external_id: str
@@ -23,6 +24,8 @@ class RawStartup:
     country: str = ""
     city: str = ""
     published_at: datetime | None = None
+    # People the source itself points to (the author of a post), as `ContactCandidate`.
+    contacts: tuple = ()
     raw_payload: dict = field(default_factory=dict)
 
     def mergeable_data(self):

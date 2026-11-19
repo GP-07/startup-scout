@@ -3,7 +3,13 @@
 import html
 from datetime import UTC, datetime
 
-from sources.constants import HTML_LINK_PATTERN, HTML_TAG_PATTERN, WHITESPACE_PATTERN
+from sources.constants import (
+    HACKER_NEWS_USER_URL,
+    HTML_LINK_PATTERN,
+    HTML_TAG_PATTERN,
+    WHITESPACE_PATTERN,
+)
+from startups.contact_extraction import ContactCandidate
 from startups.domains import is_identifying_domain, normalize_domain
 from startups.exceptions import InvalidWebsiteError
 
@@ -24,6 +30,21 @@ def identifying_domain(url):
     except InvalidWebsiteError:
         return None
     return domain if is_identifying_domain(domain) else None
+
+
+def author_contact(author, role, item_url):
+    """The author of a Hacker News post or comment, as a contact candidate (a tuple of one)."""
+    if not author:
+        return ()
+    return (
+        ContactCandidate(
+            full_name="",
+            role=role,
+            email="",
+            profile_url=HACKER_NEWS_USER_URL.format(author=author),
+            evidence_url=item_url,
+        ),
+    )
 
 
 def timestamp_to_datetime(timestamp):

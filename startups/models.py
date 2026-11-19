@@ -139,6 +139,8 @@ class WebsiteInspection(models.Model):
     home_text_length = models.PositiveIntegerField(null=True, blank=True)
     home_link_count = models.PositiveIntegerField(null=True, blank=True)
     home_has_app_root = models.BooleanField(null=True, blank=True)
+    # Contacts found on the website in the last inspection (stored in `Contact`).
+    contacts_found = models.PositiveIntegerField(default=0)
     error = models.TextField(blank=True)
 
     def __str__(self):

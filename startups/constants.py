@@ -30,6 +30,16 @@ class ContactRole(models.TextChoices):
     GENERAL = "general", "Contacto general"
 
 
+# When the same person is found twice with different roles, the first of these wins.
+CONTACT_ROLE_STRENGTH = (
+    ContactRole.CEO,
+    ContactRole.CTO,
+    ContactRole.FOUNDER,
+    ContactRole.OTHER,
+    ContactRole.GENERAL,
+)
+
+
 class ContactFoundVia(models.TextChoices):
     SOURCE = "source", "Fuente"
     WEBSITE = "website", "Web de la startup"
@@ -335,3 +345,165 @@ JOB_SECTION_PATH_PATTERN = re.compile(r"/jobs(/|$)")
 
 NON_VISIBLE_HTML_TAGS = ("script", "style", "noscript", "template", "svg")
 MAILTO_SCHEME = "mailto:"
+
+# Shortest company name prefix compared with a domain label ("acme" in `acmehq.com`).
+COMPANY_NAME_MATCH_MIN_LENGTH = 3
+
+# Contacts found on the startup's own website (docs/startup-scout-design.md §5).
+# Pages besides the home where startups introduce their team or how to reach them.
+CONTACT_PAGE_SLUGS = frozenset(
+    {
+        "about",
+        "about-us",
+        "company",
+        "contact",
+        "contact-us",
+        "contacto",
+        "equipo",
+        "founders",
+        "nosotros",
+        "our-team",
+        "people",
+        "quienes-somos",
+        "sobre-nosotros",
+        "team",
+        "the-team",
+    }
+)
+# Tried when the home links to none of the pages above, in this order.
+CONTACT_FALLBACK_PATHS = (
+    "/about",
+    "/about-us",
+    "/team",
+    "/contact",
+    "/nosotros",
+    "/equipo",
+    "/quienes-somos",
+    "/contacto",
+)
+# Pages visited for contacts besides the home (all the fallback paths fit).
+CONTACT_MAX_EXTRA_PAGES = 8
+# Mailboxes of the company rather than of a person.
+GENERAL_EMAIL_LOCAL_PARTS = frozenset(
+    {
+        "contact",
+        "contacto",
+        "founders",
+        "hello",
+        "hey",
+        "hi",
+        "hola",
+        "info",
+        "office",
+        "partners",
+        "press",
+        "sales",
+        "support",
+        "team",
+    }
+)
+EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+LINKEDIN_DOMAIN = "linkedin.com"
+LINKEDIN_PROFILE_PATH_PREFIX = "/in/"
+JSON_LD_SCRIPT_TYPE = "application/ld+json"
+JSON_LD_PERSON_TYPE = "Person"
+JSON_LD_FOUNDER_KEY = "founder"
+# Only people listed as the organization's own count: not review authors or quoted customers.
+JSON_LD_TEAM_KEYS = frozenset(
+    {"", "@graph", "employee", "employees", "founder", "founders", "member", "members"}
+)
+JSON_LD_WORKS_FOR_KEY = "worksFor"
+# Sections whose people are not the startup's team (normalized heading phrases).
+NON_TEAM_SECTION_PHRASES = (
+    "advisor",
+    "advisors",
+    "angels",
+    "backed by",
+    "backers",
+    "customers",
+    "investors",
+    "loved by",
+    "testimonials",
+    "trusted by",
+    "what people say",
+)
+SECTION_HEADING_TAGS = ("h1", "h2", "h3", "h4")
+# How many headings back to look for the section a person is in (card names are headings too).
+SECTION_HEADING_LOOKBEHIND = 3
+# A fragment like this after a job title introduces the company: "Co-founder" "at" "Globex".
+JOB_TITLE_COMPANY_MARKERS = frozenset({"at", "@", "of", "en", "de"})
+# Normalized phrases (see hiring_signal.normalize_text) that give a person's role.
+# Checked in this order: "CEO & Co-founder" is a CEO.
+ROLE_TITLE_PHRASES = (
+    (ContactRole.CEO, ("ceo", "chief executive")),
+    (ContactRole.CTO, ("cto", "chief technology", "chief technical")),
+    (
+        ContactRole.FOUNDER,
+        (
+            "founder",
+            "cofounder",
+            "fundador",
+            "fundadora",
+            "cofundador",
+            "cofundadora",
+        ),
+    ),
+)
+# What follows these in a job title is a company: "CEO at Globex", "CTO of Initech", "Founder, X".
+# If it is not the startup itself, the person is a customer quoted in a testimonial.
+JOB_TITLE_COMPANY_MARKER_PATTERN = re.compile(
+    r"\s+(?:at|of|@|en|de)\s+|\s*,\s*|\s+@", re.IGNORECASE
+)
+# A line with a role is a job title only if it is this short (longer lines are prose).
+ROLE_LINE_MAX_WORDS = 8
+# How many text fragments back from a job title to look for the person's name (team cards).
+NAME_LOOKBEHIND_FRAGMENTS = 3
+PERSON_NAME_MIN_WORDS = 2
+PERSON_NAME_MAX_WORDS = 4
+PERSON_NAME_MAX_LENGTH = 50
+# Separators between a name and a job title on one line: "Jane Roe, Founder".
+NAME_ROLE_SEPARATOR_PATTERN = re.compile(r"\s*(?:,|\||:|\s[-–—]\s)\s*")
+PERSON_NAME_WORD_PATTERN = re.compile(r"^[^\W\d_][^\W\d_'’.-]*(?:['’.-][^\W\d_]+)*\.?$")
+# Capitalized words that start headings and links, not names: "Our Team", "Meet Jane".
+NOT_NAME_WORDS = frozenset(
+    {
+        "about",
+        "advisory",
+        "built",
+        "business",
+        "by",
+        "chief",
+        "contact",
+        "council",
+        "counsel",
+        "custom",
+        "customer",
+        "director",
+        "engineer",
+        "free",
+        "general",
+        "grade",
+        "head",
+        "i’m",
+        "i'm",
+        "lead",
+        "los",
+        "manager",
+        "motion",
+        "new",
+        "officer",
+        "quotes",
+        "san",
+        "start",
+        "founders",
+        "home",
+        "join",
+        "linkedin",
+        "meet",
+        "our",
+        "team",
+        "the",
+        "us",
+        "with",
+    }
+)

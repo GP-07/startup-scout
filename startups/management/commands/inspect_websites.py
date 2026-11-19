@@ -39,12 +39,14 @@ class Command(BaseCommand):
         service = WebsiteInspectionService()
         statuses = Counter()
         hiring_signals = 0
+        contacts_found = 0
         startups_to_inspect = list(startups)
         for position, startup in enumerate(startups_to_inspect, start=1):
             inspection = service.inspect(startup)
             if inspection is None:
                 continue
             statuses[inspection.status] += 1
+            contacts_found += inspection.contacts_found
             if inspection.has_hiring_signal:
                 hiring_signals += 1
                 self.stdout.write(f"  hiring: {startup.name} -> {inspection.hiring_signal_url}")
@@ -55,7 +57,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Inspected {len(startups_to_inspect)} · with hiring signal: {hiring_signals}"
-                f" · {summary}"
+                f" · contacts found: {contacts_found} · {summary}"
             )
         )
 

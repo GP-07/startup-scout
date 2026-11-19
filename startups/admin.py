@@ -22,6 +22,12 @@ class StartupDomainInline(admin.TabularInline):
     extra = 0
 
 
+class ContactInline(admin.TabularInline):
+    model = Contact
+    extra = 0
+    fields = ["full_name", "role", "email", "profile_url", "found_via", "evidence_url", "status"]
+
+
 class WebsiteInspectionInline(admin.StackedInline):
     model = WebsiteInspection
     extra = 0
@@ -56,7 +62,7 @@ class StartupAdmin(admin.ModelAdmin):
     list_filter = [HiringSignalFilter, "status", "country"]
     search_fields = ["name", "website", "domains__domain"]
     raw_id_fields = ["possible_duplicate_of"]
-    inlines = [StartupDomainInline, WebsiteInspectionInline]
+    inlines = [StartupDomainInline, ContactInline, WebsiteInspectionInline]
 
     def get_queryset(self, request):
         return super().get_queryset(request).with_hiring_signal()
@@ -83,9 +89,11 @@ class StartupAdmin(admin.ModelAdmin):
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
-    list_display = ["startup", "full_name", "role", "email", "status"]
+    list_display = ["startup", "full_name", "role", "email", "profile_url", "found_via", "status"]
     list_filter = ["role", "status", "found_via"]
+    search_fields = ["startup__name", "full_name", "email", "profile_url"]
     raw_id_fields = ["startup"]
+    list_select_related = ["startup"]
 
 
 @admin.register(Analysis)
@@ -109,6 +117,7 @@ class WebsiteInspectionAdmin(admin.ModelAdmin):
         "hiring_signal_method",
         "hiring_signal_kind",
         "hiring_signal_url",
+        "contacts_found",
         "inspected_at",
     ]
     list_filter = ["status", "has_hiring_signal", "hiring_signal_method", "hiring_signal_kind"]

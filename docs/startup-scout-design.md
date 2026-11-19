@@ -105,7 +105,7 @@ La inspección no ejecuta JavaScript. Si la home es una SPA que arma el menú en
 - **Cuándo**: el runner encola la inspección cuando se crea una startup con dominio propio. El comando `inspect_websites` la corre sobre las que nunca se inspeccionaron, por ejemplo las ~370 que ya hay.
 - **robots.txt**: se respeta. Si no permite el acceso, la inspección queda `blocked` y no se insiste.
 - **Límites**: un request a la vez por sitio, con timeout y un User-Agent identificable. Como máximo 5 requests por sitio (home + 4 rutas).
-- **Reutilización**: en la fase 4, la misma inspección va a sumar la extracción de contactos.
+- **Reutilización**: la misma visita extrae los contactos (§5).
 
 ## 4. Deduplicación y merge entre fuentes
 
@@ -132,14 +132,15 @@ Una startup existe **una sola vez**, venga de las fuentes que venga.
 
 Sin buscadores. Para cada startup **nueva y no descartada**, una tarea en segundo plano visita su sitio y extrae contactos con reglas determinísticas, sin IA:
 
-1. **Qué páginas visita**: la home y unas pocas rutas típicas (`/about`, `/about-us`, `/team`, `/contact`, `/nosotros`, `/equipo`, `/quienes-somos`, `/contacto`), más los links de la home que apunten a ellas. Como máximo ~8 páginas por sitio.
+1. **Qué páginas visita**: la home y las páginas de "about", equipo o contacto que la home linkea. Si no linkea ninguna, prueba las rutas típicas (`/about`, `/about-us`, `/team`, `/contact`, `/nosotros`, `/equipo`, `/quienes-somos`, `/contacto`). Como máximo 8 páginas además de la home. Se hace en la misma visita que la señal de búsquedas (fase 3), no en una tarea aparte.
 2. **Qué extrae**:
    - links `mailto:`;
    - links a perfiles de LinkedIn (solo se guarda la URL, LinkedIn nunca se visita);
    - JSON-LD de schema.org (`founder`, `employee`, `Person` con `jobTitle`);
    - nombres cerca de cargos como "CEO", "Founder", "Co-founder", "CTO", "Fundador" o "Cofundador".
-3. **Cómo lo guarda**: cada hallazgo es un `Contact` con `status=candidate`, la URL de la página como evidencia y un tipo: persona con cargo o contacto general (`hello@`, `info@`, formulario).
-4. **HN**: el autor del post queda como candidato, con link a su perfil de HN.
+   Solo se guardan mails del dominio de la startup, y nunca los de búsquedas (`jobs@`, `careers@`).
+3. **Cómo lo guarda**: cada hallazgo es un `Contact` con `status=candidate`, la URL de la página como evidencia y un tipo: persona con cargo o contacto general (`hello@`, `info@`). Una nueva inspección no duplica contactos ni cambia los que ya confirmé o rechacé: solo completa campos vacíos.
+4. **HN**: el autor del post queda como candidato, con link a su perfil de HN: con rol founder en Show HN y Launch HN, y "otro" en Who is hiring (puede ser un recruiter).
 
 Hay que ser honesto con esto: es heurístico. Muchos sitios no publican al equipo, y ahí quedará solo un contacto general o nada. Para eso la ficha permite cargar el contacto a mano.
 
@@ -227,7 +228,7 @@ Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revis
 | 2. Fuentes ✅ | Adaptadores de HN (Algolia) y de alta manual; runner con `SourceRun`; tareas periódicas; comando `run_source`. Startupxplore se descartó por sus términos (§2) | Corridas diarias que traen startups reales sin duplicados; los tests usan fixtures ficticios, sin red |
 | 3. Búsquedas abiertas ✅ | `WebsiteInspection`: la home como estrategia principal y las rutas típicas como fallback, respetando robots.txt. Se encola al crear una startup; comando `inspect_websites` para las existentes | Tests con HTML ficticio (link en el nav o el footer, plataforma de búsqueda, frase, "Join us on Discord" que no cuenta, fallback por ruta, redirect a la home que no cuenta, robots.txt, SPA vacía). Corrida real sobre las startups que ya hay, midiendo cuántas tienen señal y revisando una muestra a mano |
 | 3b. Who is hiring ✅ | Adaptador de "Ask HN: Who is hiring?"; señal por aviso reciente; métricas de la home y `inspect_websites --stats` para medir las SPA | Tests con un hilo ficticio. Corrida real sobre el hilo de noviembre de 2026 (§5.4 de la arquitectura) |
-| 4. Contactos | Se suma a la misma inspección de la fase 3: mailto, LinkedIn, JSON-LD y cargos en `/about`, `/team`, etc., más el autor de HN | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
+| 4. Contactos ✅ | Se suma a la misma inspección de la fase 3: mailto, LinkedIn, JSON-LD y cargos en `/about`, `/team`, etc., más el autor de HN | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
 | 5. Frontend | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |
 
 **MVP terminado** cuando corre una semana solo, descubriendo cada día, y yo hago el ciclo completo con al menos una startup: la reviso, escribo el análisis, tomo el contacto de la ficha, se lo mando desde mi casilla y lo marco como enviado.
