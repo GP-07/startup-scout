@@ -5,7 +5,7 @@ from django.db import IntegrityError, transaction
 
 from sources.models import SourceRecord
 from startups.constants import MAX_INGESTION_ATTEMPTS
-from startups.domains import normalize_domain, normalize_name
+from startups.domains import is_identifying_domain, normalize_domain, normalize_name
 from startups.exceptions import IngestionConflictError, InvalidWebsiteError
 from startups.merge import recompute_startup
 from startups.models import Startup, StartupDomain
@@ -58,6 +58,9 @@ class StartupIngestionService:
         except InvalidWebsiteError:
             logger.info("Ignoring website without registrable domain: %s", website)
             return []
+        if not is_identifying_domain(original_domain):
+            # A GitHub repository or an app store page: the domain belongs to the platform.
+            return []
 
         final_url = self.redirect_resolver.resolve_final_url(website)
         if not final_url:
@@ -66,7 +69,7 @@ class StartupIngestionService:
             final_domain = normalize_domain(final_url)
         except InvalidWebsiteError:
             return [original_domain]
-        if final_domain == original_domain:
+        if final_domain == original_domain or not is_identifying_domain(final_domain):
             return [original_domain]
         return [final_domain, original_domain]
 

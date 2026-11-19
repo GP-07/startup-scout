@@ -1,0 +1,45 @@
+{
+  "hits": [
+    {
+      "objectID": "9000001",
+      "title": "Show HN: Lumbre – Invoices that chase late payers for you",
+      "url": "https://www.lumbreinvoices.com/?ref=hn",
+      "story_text": null,
+      "author": "fictional_founder_1",
+      "created_at": "2026-11-18T08:00:00Z",
+      "created_at_i": 1795075200,
+      "points": 12,
+      "num_comments": 3,
+      "_tags": ["story", "author_fictional_founder_1", "story_9000001", "show_hn"],
+      "_highlightResult": {"title": {"value": "ignored"}}
+    },
+    {
+      "objectID": "9000002",
+      "title": "Show HN: Brisa, a self-hosted feature flag server",
+      "url": "https://github.com/brisa-flags/brisa",
+      "story_text": "Hi HN! Docs and hosted version at <a href=\"https:&#x2F;&#x2F;brisaflags.com&#x2F;docs\" rel=\"nofollow\">https:&#x2F;&#x2F;brisaflags.com&#x2F;docs</a>.<p>Feedback welcome.",
+      "author": "fictional_founder_2",
+      "created_at": "2026-11-18T09:00:00Z",
+      "created_at_i": 1795078800,
+      "points": 30,
+      "num_comments": 8,
+      "_tags": ["story", "author_fictional_founder_2", "story_9000002", "show_hn"]
+    },
+    {
+      "objectID": "9000003",
+      "title": "Show HN: A tiny Rust crate to parse dates",
+      "url": "https://github.com/someone/tiny-dates",
+      "story_text": "",
+      "author": "fictional_dev_3",
+      "created_at": "2026-11-18T10:00:00Z",
+      "created_at_i": 1795082400,
+      "points": 2,
+      "num_comments": 0,
+      "_tags": ["story", "author_fictional_dev_3", "story_9000003", "show_hn"]
+    }
+  ],
+  "nbHits": 3,
+  "page": 0,
+  "nbPages": 1,
+  "hitsPerPage": 100
+}

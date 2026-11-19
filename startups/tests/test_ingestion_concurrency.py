@@ -47,7 +47,7 @@ def test_concurrent_ingestion_of_same_domain_creates_one_startup():
     ingestion = ConcurrentIngestion(
         [
             (SourceKey.HACKER_NEWS, build_raw_startup("hn-1", "Acme", website="https://acme.com")),
-            (SourceKey.STARTUPXPLORE, build_raw_startup("acme", "Acme", website="acme.com")),
+            (SourceKey.MANUAL, build_raw_startup("acme", "Acme", website="acme.com")),
             (SourceKey.MANUAL, build_raw_startup("manual-1", "Acme", website="www.acme.com")),
             (
                 SourceKey.HACKER_NEWS,

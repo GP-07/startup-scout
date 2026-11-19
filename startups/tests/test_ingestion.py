@@ -43,7 +43,7 @@ def test_same_domain_from_two_sources_is_one_startup():
     )
 
     result = service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup("acme", "Acme S.L.", website="https://www.acme.com/es/"),
     )
 
@@ -60,7 +60,7 @@ def test_subdomain_and_www_variants_are_deduplicated():
         build_raw_startup("hn-1", "Acme", website="https://app.acme.com/signup"),
     )
     service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup("acme", "Acme", website="http://WWW.ACME.COM"),
     )
 
@@ -89,7 +89,7 @@ def test_redirect_target_is_stored_as_alias_and_used_for_matching():
     )
 
     second = service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup("acme", "Acme", website="https://acme.com"),
     )
 
@@ -122,12 +122,12 @@ def test_fields_are_merged_by_source_priority():
     )
 
     result = service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup(
             "acme",
             "Acme",
             website="https://acme.com",
-            description="Startupxplore",
+            description="Manual",
             country="ES",
             city="Barcelona",
         ),
@@ -135,16 +135,16 @@ def test_fields_are_merged_by_source_priority():
 
     startup = result.startup
     assert startup.name == "Acme"
-    assert startup.description == "Startupxplore"
+    assert startup.description == "Manual"
     assert startup.country == "ES"
     assert startup.city == "Barcelona"
-    assert startup.field_sources["name"] == SourceKey.STARTUPXPLORE
+    assert startup.field_sources["name"] == SourceKey.MANUAL
 
 
 def test_startup_without_website_and_same_name_is_flagged_not_merged():
     service = build_service()
     existing = service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup("acme", "Acme S.L.", website="https://acme.com"),
     ).startup
 
@@ -185,10 +185,38 @@ def test_domains_split_across_two_startups_are_flagged_as_duplicates():
     redirecting_service = build_service(final_urls={"https://acme.io": "https://acme.com"})
 
     result = redirecting_service.ingest(
-        get_source(SourceKey.STARTUPXPLORE),
+        get_source(SourceKey.MANUAL),
         build_raw_startup("acme", "Acme", website="https://acme.io"),
     )
 
     assert result.startup == acme_io
     acme_com.refresh_from_db()
     assert acme_com.possible_duplicate_of == acme_io
+
+
+def test_platform_links_do_not_merge_different_startups():
+    service = build_service()
+    first = service.ingest(
+        get_source(SourceKey.HACKER_NEWS),
+        build_raw_startup("hn-1", "Tiny dates", website="https://github.com/someone/tiny-dates"),
+    ).startup
+
+    second = service.ingest(
+        get_source(SourceKey.HACKER_NEWS),
+        build_raw_startup("hn-2", "Brisa", website="https://github.com/brisa-flags/brisa"),
+    ).startup
+
+    assert first != second
+    assert not StartupDomain.objects.exists()
+    assert second.website == "https://github.com/brisa-flags/brisa"
+
+
+def test_redirect_to_platform_is_not_used_as_alias():
+    service = build_service(final_urls={"https://acme.com": "https://github.com/acme"})
+
+    startup = service.ingest(
+        get_source(SourceKey.HACKER_NEWS),
+        build_raw_startup("hn-1", "Acme", website="https://acme.com"),
+    ).startup
+
+    assert list(startup.domains.values_list("domain", flat=True)) == ["acme.com"]

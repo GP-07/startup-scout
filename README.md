@@ -17,7 +17,6 @@ Python 3.12 · Django 5.2 · PostgreSQL · huey + Redis · Django templates + HT
 | Source | Access |
 |---|---|
 | Hacker News (Show HN / Launch HN) | Public Algolia API |
-| Startupxplore | Sitemap + public profile pages (robots.txt allows it) |
 | Manual | Paste a URL in the web UI |
 
 A startup exists once, whatever the number of sources that mention it: identity is the
@@ -34,6 +33,12 @@ docker compose up --build
 The app listens on http://localhost:8000. Postgres and Redis are exposed on ports 5433 and 6380
 so they don't clash with local services.
 
+Run a source now instead of waiting for the daily 07:00 task:
+
+```bash
+docker compose run --rm web python manage.py run_source hacker_news
+```
+
 ## Tests and lint
 
 ```bash
@@ -45,7 +50,7 @@ docker compose run --rm web ruff check .
 
 - [x] Phase 0 — project setup, docker compose, CI
 - [x] Phase 1 — domain model, source registry, ingestion with deduplication and merge
-- [ ] Phase 2 — source adapters (Hacker News, Startupxplore, manual)
+- [x] Phase 2 — source adapters (Hacker News, manual), runner, daily huey task
 - [ ] Phase 3 — location rule
 - [ ] Phase 4 — contacts from the startup's own website
 - [ ] Phase 5 — web UI

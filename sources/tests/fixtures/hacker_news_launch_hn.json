@@ -1,0 +1,32 @@
+{
+  "hits": [
+    {
+      "objectID": "9000010",
+      "title": "Launch HN: Vela (YC F26) – Copilot for warehouse operators",
+      "url": null,
+      "story_text": "Hi HN! We are the founders of Vela (<a href=\"https:&#x2F;&#x2F;velawarehouse.com\">https:&#x2F;&#x2F;velawarehouse.com</a>). We help warehouses plan picking routes.<p>Code samples at <a href=\"https:&#x2F;&#x2F;github.com&#x2F;vela&#x2F;samples\">github</a>.",
+      "author": "fictional_founder_10",
+      "created_at": "2026-11-18T11:00:00Z",
+      "created_at_i": 1795086000,
+      "points": 80,
+      "num_comments": 40,
+      "_tags": ["story", "author_fictional_founder_10", "story_9000010", "launch_hn"]
+    },
+    {
+      "objectID": "9000011",
+      "title": "What we learned reading 500 Launch HN posts",
+      "url": "https://blog.exampleanalytics.com/launch-hn",
+      "story_text": null,
+      "author": "fictional_blogger",
+      "created_at": "2026-11-18T12:00:00Z",
+      "created_at_i": 1795089600,
+      "points": 5,
+      "num_comments": 1,
+      "_tags": ["story", "author_fictional_blogger", "story_9000011"]
+    }
+  ],
+  "nbHits": 2,
+  "page": 0,
+  "nbPages": 1,
+  "hitsPerPage": 100
+}

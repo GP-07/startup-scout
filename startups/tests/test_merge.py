@@ -6,7 +6,7 @@ def test_merge_prefers_higher_priority_source_per_field():
     result = merge_source_data(
         [
             (SourceKey.HACKER_NEWS, {"name": "Acme (HN)", "description": "From HN", "city": ""}),
-            (SourceKey.STARTUPXPLORE, {"name": "Acme", "description": "", "city": "Barcelona"}),
+            (SourceKey.MANUAL, {"name": "Acme", "description": "", "city": "Barcelona"}),
         ]
     )
 
@@ -14,16 +14,16 @@ def test_merge_prefers_higher_priority_source_per_field():
     assert result.values["description"] == "From HN"
     assert result.values["city"] == "Barcelona"
     assert result.field_sources == {
-        "name": SourceKey.STARTUPXPLORE,
+        "name": SourceKey.MANUAL,
         "description": SourceKey.HACKER_NEWS,
-        "city": SourceKey.STARTUPXPLORE,
+        "city": SourceKey.MANUAL,
     }
 
 
 def test_merge_manual_data_always_wins():
     result = merge_source_data(
         [
-            (SourceKey.STARTUPXPLORE, {"name": "Acme", "country": "ES"}),
+            (SourceKey.HACKER_NEWS, {"name": "Acme", "country": "ES"}),
             (SourceKey.MANUAL, {"name": "Acme Robotics"}),
         ]
     )

@@ -23,21 +23,28 @@ Verificado el 2026-11-18.
 | Fuente | Resultado | Integración |
 |---|---|---|
 | **Hacker News** | API pública de Algolia (`hn.algolia.com/api/v1`), sin autenticación | **API**. Se traen "Show HN" y "Launch HN" (startups de YC). El autor del post suele ser el founder |
-| **Startupxplore** | robots.txt permite explícitamente a ClaudeBot. Sitemap con ~8.100 fichas; cada ficha trae la web y la ciudad. **El `lastmod` del sitemap es de 2018**: no sirve para ordenar por fecha | **HTML**. Las nuevas se detectan comparando el sitemap con la corrida anterior; solo se descargan las fichas nuevas, con rate limit. Hay que leer sus ToS antes de activarla |
 | **Alta manual** | n/a | Formulario en la web: pego una URL y se crea la ficha, pasando por el dedupe |
 
 Riesgos:
 - Show HN trae ruido (proyectos personales, librerías). Como no se filtra, la web tiene que permitir descartar rápido.
-- Hay que confirmar que Startupxplore sigue sumando fichas: lo sabremos tras la primera semana de corridas.
-- **EU-Startups queda fuera**: todo su dominio, incluidos el RSS y la API de WordPress, está detrás de un challenge de Cloudflare.
+- El MVP tiene una sola fuente automática (HN) más el alta manual. Las startups españolas o europeas van a llegar sobre todo por alta manual, hasta sumar otra fuente.
+
+### Fuentes descartadas
+
+| Fuente | Fecha | Motivo |
+|---|---|---|
+| **EU-Startups** | 2026-11-18 | Todo el dominio (sitio, robots.txt, feed RSS y API de WordPress) está detrás de un challenge de Cloudflare, y no tiene API oficial. Esquivar esa protección no es una opción |
+| **Startupxplore** | 2026-11-18 | Su robots.txt permite el acceso, pero sus **términos de uso (cláusulas 7.3 y 7.4) prohíben reproducir su base de datos, total o parcialmente, y usar su contenido sin consentimiento previo y por escrito**. Además, el sitio hoy está orientado al crowdfunding y el sitemap del directorio es de 2018. Se eliminó del código: la migración `sources/0003_remove_startupxplore` borra la fuente y la saca de los choices de `SourceKey`. Volver a sumarla requeriría su consentimiento escrito y un adaptador nuevo |
+
+Lección para fuentes futuras: **robots.txt no alcanza**. Antes de escribir un adaptador HTML hay que leer los términos de uso del sitio.
 
 ### Fuentes en la base y mapeo en memoria
 
-- La tabla `Source` guarda cada fuente con una **clave estable** (`key`, slug único: `hacker_news`, `startupxplore`, `manual`), un nombre visible, `enabled` y su `config` (JSON).
+- La tabla `Source` guarda cada fuente con una **clave estable** (`key`, slug único: `hacker_news`, `manual`), un nombre visible, `enabled` y su `config` (JSON).
 - En código, `sources/registry.py` tiene un mapeo en memoria `SOURCE_ADAPTERS = {"hacker_news": HackerNewsAdapter, ...}`. Las claves van como constantes en `sources/constants.py`.
 - Para correr una fuente se lee el `Source` de la base, se busca su `key` en el mapeo y se instancia el adaptador con su `config`. **En la base nunca se guarda el nombre de una clase**: si se renombra o se mueve un adaptador, la base no se entera.
 - Si una `key` de la base no está en el mapeo, se lanza `UnknownSourceError` (en `exceptions.py`). Un test verifica que todas las fuentes sembradas tengan adaptador.
-- Las tres fuentes se crean con una data migration.
+- Las fuentes se crean con una data migration.
 
 ## 3. Única regla de descarte automático: ubicación
 
@@ -66,7 +73,7 @@ Una startup existe **una sola vez**, venga de las fuentes que venga.
 
 **Merge**
 - Se guarda el registro crudo de cada fuente (`SourceRecord`). La ficha unificada se **recalcula** a partir de esos registros, así que el merge es determinístico e idempotente.
-- Prioridad por campo, en `constants.py`: `manual > startupxplore > hacker_news`. Gana el primer valor no vacío; lo que edito a mano siempre gana.
+- Prioridad por campo, en `constants.py`: `manual > hacker_news`. Gana el primer valor no vacío; lo que edito a mano siempre gana.
 - Se guarda la procedencia de cada campo (`field_sources`).
 
 **Concurrencia**
@@ -116,14 +123,12 @@ flowchart LR
     Worker["huey worker<br/>tareas periódicas"]
   end
   HN["HN Algolia API"]
-  SX["Startupxplore<br/>sitemap + fichas"]
   Sites["Sitios de las startups<br/>(contactos)"]
 
   Browser --> Web --> DB
   Web -- encola --> Redis --> Worker
   Worker --> DB
   Worker -- diario --> HN
-  Worker -- diario --> SX
   Worker -- startups nuevas --> Sites
 ```
 
@@ -136,7 +141,7 @@ flowchart LR
 
 | Concepto | Costo |
 |---|---|
-| HN Algolia, Startupxplore, sitios de las startups | Gratis |
+| HN Algolia, sitios de las startups | Gratis |
 | Postgres, Redis, huey | Gratis (local, docker compose) |
 | GitHub (repo público) + Actions | Gratis |
 | Hosting | $0 mientras corra local. El deploy queda como mejora futura |
@@ -170,7 +175,7 @@ Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revis
 |---|---|---|
 | 0. Setup | Django + Postgres + Redis + huey en docker compose; ruff y pytest; GitHub Actions; README, LICENSE y `.env.example` | `docker compose up` levanta todo y la CI pasa |
 | 1. Dominio | Modelos, `Source` con data migration y registro en memoria, normalización de dominios, ingesta con dedupe, merge por prioridad y concurrencia | Tests de dedupe (www, subdominios, PaaS, redirects, mismo nombre sin web, ingestas concurrentes) y de `UnknownSourceError` |
-| 2. Fuentes | Adaptadores de HN (Algolia) y de alta manual; Startupxplore (diff del sitemap y parseo de fichas, después de leer sus ToS); `SourceRun`; tareas periódicas | Corridas diarias que traen startups reales sin duplicados; los tests usan fixtures grabados, sin red |
+| 2. Fuentes ✅ | Adaptadores de HN (Algolia) y de alta manual; runner con `SourceRun`; tareas periódicas; comando `run_source`. Startupxplore se descartó por sus términos (§2) | Corridas diarias que traen startups reales sin duplicados; los tests usan fixtures ficticios, sin red |
 | 3. Regla de ubicación | País → zonas horarias contra `Europe/Madrid`; descarte reversible con motivo | Tests por país: multi-zona, horario de verano, desconocido, sin remoto |
 | 4. Contactos | Extractor desde la web de la startup (mailto, LinkedIn, JSON-LD, cargos) y autor de HN; respeto de robots.txt | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
 | 5. Frontend | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |

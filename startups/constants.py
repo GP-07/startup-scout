@@ -48,7 +48,6 @@ MERGEABLE_FIELDS = ("name", "website", "description", "country", "city")
 # First source with a non-blank value wins. Sources not listed here go last.
 SOURCE_MERGE_PRIORITY = (
     SourceKey.MANUAL,
-    SourceKey.STARTUPXPLORE,
     SourceKey.HACKER_NEWS,
 )
 
@@ -75,6 +74,62 @@ LEGAL_NAME_SUFFIXES = frozenset(
         "srl",
     }
 )
+
+# Platforms whose links point to content inside them (a repository, an app store page, a profile):
+# their domain says nothing about which startup it is, so it is never used as identity.
+NON_IDENTIFYING_DOMAINS = frozenset(
+    {
+        "apple.com",
+        "archive.org",
+        "arxiv.org",
+        "bitbucket.org",
+        "crates.io",
+        "dev.to",
+        "discord.com",
+        "discord.gg",
+        "facebook.com",
+        "figma.com",
+        "github.com",
+        "gitlab.com",
+        "google.com",
+        "huggingface.co",
+        "instagram.com",
+        "kaggle.com",
+        "linkedin.com",
+        "loom.com",
+        "microsoft.com",
+        "mozilla.org",
+        "notion.so",
+        "npmjs.com",
+        "producthunt.com",
+        "pypi.org",
+        "reddit.com",
+        "sourceforge.net",
+        "t.me",
+        "tiktok.com",
+        "twitter.com",
+        "wikipedia.org",
+        "x.com",
+        "ycombinator.com",
+        "youtu.be",
+        "youtube.com",
+    }
+)
+
+# Hosts that give each customer a subdomain but are missing from the Public Suffix List:
+# `acme.substack.com` identifies Acme, while `substack.com` alone identifies nobody.
+SHARED_HOST_DOMAINS = frozenset(
+    {
+        "gitbook.io",
+        "hashnode.dev",
+        "itch.io",
+        "medium.com",
+        "substack.com",
+        "wixsite.com",
+        "wordpress.com",
+    }
+)
+WWW_SUBDOMAIN = "www"
 
 # Attempts to ingest one startup when concurrent ingestions collide on a unique constraint.
 MAX_INGESTION_ATTEMPTS = 3

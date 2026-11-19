@@ -1,6 +1,6 @@
 import pytest
 
-from startups.domains import normalize_domain, normalize_name
+from startups.domains import is_identifying_domain, normalize_domain, normalize_name
 from startups.exceptions import InvalidWebsiteError
 
 
@@ -49,3 +49,39 @@ def test_normalize_domain_rejects_values_without_registrable_domain(website):
 )
 def test_normalize_name_ignores_case_accents_punctuation_and_legal_suffixes(name, expected):
     assert normalize_name(name) == expected
+
+
+@pytest.mark.parametrize(
+    ("website", "expected_domain"),
+    [
+        ("https://acme.substack.com/p/launch", "acme.substack.com"),
+        ("https://www.acme.itch.io", "acme.itch.io"),
+        ("https://acme.medium.com", "acme.medium.com"),
+        ("https://medium.com/@acme/launch", "medium.com"),
+    ],
+)
+def test_sites_hosted_as_subdomains_of_shared_hosts_keep_their_subdomain(website, expected_domain):
+    assert normalize_domain(website) == expected_domain
+
+
+@pytest.mark.parametrize(
+    "website",
+    [
+        "https://github.com/acme/acme",
+        "https://apps.apple.com/app/acme/id123",
+        "https://play.google.com/store/apps/details?id=com.acme",
+        "https://www.youtube.com/watch?v=abc",
+        "https://medium.com/@acme/launch",
+        "https://x.com/acme",
+    ],
+)
+def test_platform_domains_do_not_identify_a_startup(website):
+    assert is_identifying_domain(normalize_domain(website)) is False
+
+
+@pytest.mark.parametrize(
+    "website",
+    ["https://acme.com", "https://acme.vercel.app", "https://acme.substack.com"],
+)
+def test_own_domains_identify_a_startup(website):
+    assert is_identifying_domain(normalize_domain(website)) is True
