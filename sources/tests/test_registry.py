@@ -4,6 +4,7 @@ import pytest
 
 from sources import registry
 from sources.adapters.hacker_news import HackerNewsAdapter
+from sources.adapters.hacker_news_hiring import HackerNewsHiringAdapter
 from sources.adapters.manual import ManualSourceAdapter
 from sources.constants import SourceKey
 from sources.exceptions import UnknownSourceError
@@ -16,6 +17,7 @@ pytestmark = pytest.mark.django_db
 def test_initial_sources_are_seeded_by_migration():
     assert set(Source.objects.values_list("key", flat=True)) == {
         SourceKey.HACKER_NEWS,
+        SourceKey.HACKER_NEWS_HIRING,
         SourceKey.MANUAL,
     }
 
@@ -28,6 +30,7 @@ def test_every_enabled_source_has_an_adapter():
 def test_registered_adapters():
     expected_adapters = {
         SourceKey.HACKER_NEWS: HackerNewsAdapter,
+        SourceKey.HACKER_NEWS_HIRING: HackerNewsHiringAdapter,
         SourceKey.MANUAL: ManualSourceAdapter,
     }
 

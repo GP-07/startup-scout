@@ -1,11 +1,16 @@
-import html
 import logging
 from datetime import timedelta
 
-import httpx
 from django.utils import timezone
 
+from sources.adapters.algolia import created_after_filter, fetch_algolia_hits
 from sources.adapters.base import RawStartup, SourceAdapter, SourceFetchResult
+from sources.adapters.html_text import (
+    extract_links,
+    identifying_domain,
+    plain_text,
+    timestamp_to_datetime,
+)
 from sources.constants import (
     HACKER_NEWS_CURSOR_KEY,
     HACKER_NEWS_CURSOR_OVERLAP_SECONDS,
@@ -13,18 +18,11 @@ from sources.constants import (
     HACKER_NEWS_IGNORED_PAYLOAD_KEYS,
     HACKER_NEWS_INITIAL_LOOKBACK_DAYS,
     HACKER_NEWS_ITEM_URL,
-    HACKER_NEWS_PAGE_SIZE,
     HACKER_NEWS_QUERIES,
-    HACKER_NEWS_SEARCH_URL,
     HACKER_NEWS_TITLE_SEPARATORS,
-    HTML_LINK_PATTERN,
-    HTML_TAG_PATTERN,
-    WHITESPACE_PATTERN,
     YC_BATCH_PATTERN,
 )
 from sources.exceptions import SourceFetchError
-from startups.domains import is_identifying_domain, normalize_domain
-from startups.exceptions import InvalidWebsiteError
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,11 @@ class HackerNewsAdapter(SourceAdapter):
             query = HACKER_NEWS_QUERIES.get(tag)
             if query is None:
                 raise SourceFetchError(f"Unknown Hacker News tag '{tag}'")
-            for hit in self._fetch_hits(query["params"], since_timestamp):
+            query_params = {
+                **query["params"],
+                "numericFilters": created_after_filter(since_timestamp),
+            }
+            for hit in fetch_algolia_hits(self.http_client, query_params):
                 newest_timestamp = max(newest_timestamp, hit["created_at_i"])
                 if not (hit.get("title") or "").startswith(query["title_prefix"]):
                     continue
@@ -64,26 +66,6 @@ class HackerNewsAdapter(SourceAdapter):
         lookback_days = self.config.get("initial_lookback_days", HACKER_NEWS_INITIAL_LOOKBACK_DAYS)
         return int((timezone.now() - timedelta(days=lookback_days)).timestamp())
 
-    def _fetch_hits(self, query_params, since_timestamp):
-        page = 0
-        page_count = 1
-        while page < page_count:
-            params = {
-                **query_params,
-                "numericFilters": f"created_at_i>{since_timestamp}",
-                "hitsPerPage": HACKER_NEWS_PAGE_SIZE,
-                "page": page,
-            }
-            try:
-                response = self.http_client.get(HACKER_NEWS_SEARCH_URL, params=params)
-                response.raise_for_status()
-                body = response.json()
-            except (httpx.HTTPError, ValueError) as error:
-                raise SourceFetchError(f"Hacker News request failed: {error}") from error
-            yield from body.get("hits", [])
-            page_count = body.get("nbPages", 0)
-            page += 1
-
     def _to_raw_startup(self, hit, title_prefix):
         title_without_prefix = hit["title"][len(title_prefix) :].strip()
         name, tagline = _split_title(title_without_prefix)
@@ -93,7 +75,8 @@ class HackerNewsAdapter(SourceAdapter):
             url=HACKER_NEWS_ITEM_URL.format(item_id=hit["objectID"]),
             name=YC_BATCH_PATTERN.sub("", name),
             website=_choose_website(hit.get("url") or "", story_text),
-            description=tagline or _plain_text(story_text)[:HACKER_NEWS_DESCRIPTION_MAX_LENGTH],
+            description=tagline or plain_text(story_text)[:HACKER_NEWS_DESCRIPTION_MAX_LENGTH],
+            published_at=timestamp_to_datetime(hit.get("created_at_i")),
             raw_payload={
                 key: value
                 for key, value in hit.items()
@@ -120,20 +103,7 @@ def _choose_website(post_url, story_text):
 
     Show HN posts often link a GitHub repository and mention the real site in the text.
     """
-    linked_urls = [html.unescape(link) for link in HTML_LINK_PATTERN.findall(story_text)]
-    for candidate_url in [post_url, *linked_urls]:
-        if candidate_url and _has_identifying_domain(candidate_url):
+    for candidate_url in [post_url, *extract_links(story_text)]:
+        if candidate_url and identifying_domain(candidate_url):
             return candidate_url
     return post_url
-
-
-def _has_identifying_domain(url):
-    try:
-        return is_identifying_domain(normalize_domain(url))
-    except InvalidWebsiteError:
-        return False
-
-
-def _plain_text(story_text):
-    without_tags = HTML_TAG_PATTERN.sub(" ", story_text)
-    return WHITESPACE_PATTERN.sub(" ", html.unescape(without_tags)).strip()

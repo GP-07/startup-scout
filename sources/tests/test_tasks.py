@@ -13,8 +13,11 @@ def test_daily_task_runs_only_enabled_periodic_sources():
     with mock.patch.object(tasks, "run_source_task") as run_source_task:
         tasks.run_enabled_sources_task.call_local()
 
-    scheduled_source_ids = [call.args[0] for call in run_source_task.call_args_list]
-    assert scheduled_source_ids == [Source.objects.get(key=SourceKey.HACKER_NEWS).id]
+    scheduled_source_ids = {call.args[0] for call in run_source_task.call_args_list}
+    periodic_keys = [SourceKey.HACKER_NEWS, SourceKey.HACKER_NEWS_HIRING]
+    assert scheduled_source_ids == set(
+        Source.objects.filter(key__in=periodic_keys).values_list("id", flat=True)
+    )
 
 
 def test_run_source_task_runs_the_source_with_the_runner():

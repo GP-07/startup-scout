@@ -7,8 +7,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    REFERENCE_TIMEZONE=(str, "Europe/Madrid"),
-    HOME_COUNTRY=(str, "ES"),
     HUEY_IMMEDIATE=(bool, False),
 )
 environ.Env.read_env(BASE_DIR / ".env")
@@ -80,7 +78,3 @@ HUEY = {
     "url": env("REDIS_URL", default="redis://localhost:6380/0"),
     "immediate": env("HUEY_IMMEDIATE"),
 }
-
-# Location rule (see docs/startup-scout-design.md §3).
-REFERENCE_TIMEZONE = env("REFERENCE_TIMEZONE")
-HOME_COUNTRY = env("HOME_COUNTRY")

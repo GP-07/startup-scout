@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import httpx
 
@@ -11,6 +12,7 @@ class RawStartup:
     """A startup as a source reports it, already mapped to our field names.
 
     `country` is an ISO 3166-1 alpha-2 code; adapters are responsible for converting it.
+    `published_at` is when the source published it (a post, a comment), if the source says.
     """
 
     external_id: str
@@ -20,6 +22,7 @@ class RawStartup:
     description: str = ""
     country: str = ""
     city: str = ""
+    published_at: datetime | None = None
     raw_payload: dict = field(default_factory=dict)
 
     def mergeable_data(self):

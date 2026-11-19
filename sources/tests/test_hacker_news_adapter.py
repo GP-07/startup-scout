@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -50,6 +51,7 @@ def test_show_hn_post_uses_post_url_as_website_and_title_as_name():
     assert lumbre.url == "https://news.ycombinator.com/item?id=9000001"
     assert "_highlightResult" not in lumbre.raw_payload
     assert lumbre.raw_payload["author"] == "fictional_founder_1"
+    assert lumbre.published_at == datetime.fromtimestamp(1795075200, tz=UTC)
 
 
 def test_repository_link_is_replaced_by_own_domain_found_in_post_text():

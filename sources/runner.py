@@ -7,6 +7,7 @@ from sources.exceptions import SourceFetchError, UnknownSourceError
 from sources.models import SourceRun
 from sources.registry import get_adapter
 from startups.ingestion import StartupIngestionService
+from startups.tasks import enqueue_website_inspection
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +16,13 @@ class SourceRunner:
     """Runs one source end to end: fetch from the adapter, ingest each startup, record the run.
 
     The cursor only moves forward when the fetch succeeds. A startup that fails to ingest is
-    logged in the run's `error` and does not stop the others.
+    logged in the run's `error` and does not stop the others. Each startup created is handed to
+    `on_startup_created` (by default, it schedules the inspection of its website).
     """
 
-    def __init__(self, ingestion_service=None):
+    def __init__(self, ingestion_service=None, on_startup_created=enqueue_website_inspection):
         self.ingestion_service = ingestion_service or StartupIngestionService()
+        self.on_startup_created = on_startup_created
 
     def run(self, source):
         source_run = SourceRun.objects.create(source=source)
@@ -40,6 +43,7 @@ class SourceRunner:
                 continue
             if ingestion_result.created:
                 source_run.items_new += 1
+                self.on_startup_created(ingestion_result.startup)
 
         source_run.cursor = fetch_result.cursor
         return self._finish(

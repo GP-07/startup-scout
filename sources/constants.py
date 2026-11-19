@@ -7,6 +7,7 @@ class SourceKey(models.TextChoices):
     """Stable source identifiers: stored in the database, mapped to adapters in memory."""
 
     HACKER_NEWS = "hacker_news", "Hacker News"
+    HACKER_NEWS_HIRING = "hacker_news_hiring", "HN Who is hiring"
     MANUAL = "manual", "Alta manual"
 
 
@@ -51,3 +52,44 @@ YC_BATCH_PATTERN = re.compile(r"\s*\(YC [A-Z]\d{2}\)\s*$")
 HTML_LINK_PATTERN = re.compile(r'href="([^"]+)"')
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
 WHITESPACE_PATTERN = re.compile(r"\s+")
+
+# Hacker News "Ask HN: Who is hiring?": a monthly thread where each top-level comment is a job post.
+HACKER_NEWS_HIRING_THREAD_TAGS = "story,author_whoishiring"
+HACKER_NEWS_HIRING_THREAD_TITLE_PREFIX = "Ask HN: Who is hiring?"
+HACKER_NEWS_HIRING_COMMENT_TAGS = "comment,story_{thread_id}"
+# Comments keep arriving after the 1st of the month: threads this recent are read again daily.
+HACKER_NEWS_HIRING_THREAD_MAX_AGE_DAYS = 45
+# On the first run, how many of the newest threads to read in full.
+HACKER_NEWS_HIRING_INITIAL_THREADS = 1
+# Job posts start with a header such as `Acme | Backend Engineer | Berlin | REMOTE`.
+HACKER_NEWS_HIRING_HEADER_SEPARATOR = "|"
+HTML_PARAGRAPH_PATTERN = re.compile(r"<p>", re.IGNORECASE)
+PARENTHESIZED_TEXT_PATTERN = re.compile(r"\([^)]*\)")
+EMAIL_ADDRESS_PATTERN = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
+# Shortest company name prefix compared with a domain label ("acme" in `acmehq.com`).
+COMPANY_NAME_MATCH_MIN_LENGTH = 3
+DEFAULT_WEBSITE_SCHEME = "https://"
+# Mailbox providers: an address there says nothing about the company's own domain.
+FREE_EMAIL_DOMAINS = frozenset(
+    {
+        "aol.com",
+        "fastmail.com",
+        "gmail.com",
+        "gmx.com",
+        "gmx.de",
+        "googlemail.com",
+        "hey.com",
+        "hotmail.com",
+        "icloud.com",
+        "live.com",
+        "mail.com",
+        "me.com",
+        "outlook.com",
+        "pm.me",
+        "proton.me",
+        "protonmail.com",
+        "yahoo.com",
+        "yandex.com",
+        "zoho.com",
+    }
+)

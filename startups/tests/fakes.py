@@ -20,5 +20,6 @@ def build_raw_startup(external_id, name, website="", **fields):
         description=fields.get("description", ""),
         country=fields.get("country", ""),
         city=fields.get("city", ""),
+        published_at=fields.get("published_at"),
         raw_payload=fields.get("raw_payload", {"id": external_id}),
     )

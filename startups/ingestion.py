@@ -98,6 +98,7 @@ class StartupIngestionService:
             url=raw_startup.url,
             data=raw_startup.mergeable_data(),
             payload=raw_startup.raw_payload,
+            published_at=raw_startup.published_at,
         )
         startup = recompute_startup(startup)
         return IngestionResult(startup=startup, created=created, record_created=True)
@@ -150,4 +151,5 @@ class StartupIngestionService:
         record.url = raw_startup.url
         record.data = raw_startup.mergeable_data()
         record.payload = raw_startup.raw_payload
-        record.save(update_fields=["url", "data", "payload", "fetched_at"])
+        record.published_at = raw_startup.published_at
+        record.save(update_fields=["url", "data", "payload", "published_at", "fetched_at"])

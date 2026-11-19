@@ -15,6 +15,7 @@ Yo reviso el producto y escribo mis análisis desde la misma web: crearlos, edit
 - Buscadores externos (Brave u otros).
 - EU-Startups y cualquier otra fuente.
 - Perfil del candidato, envío de mails y deploy.
+- Detección de país y regla de ubicación (descarte automático por zona horaria).
 
 ## 2. Fuentes del MVP
 
@@ -23,11 +24,24 @@ Verificado el 2026-11-18.
 | Fuente | Resultado | Integración |
 |---|---|---|
 | **Hacker News** | API pública de Algolia (`hn.algolia.com/api/v1`), sin autenticación | **API**. Se traen "Show HN" y "Launch HN" (startups de YC). El autor del post suele ser el founder |
+| **HN Who is hiring** | La misma API de Algolia | **API**. Cada comentario de primer nivel del hilo mensual "Ask HN: Who is hiring?" es una empresa que está contratando (ver abajo). Agregada el 2026-11-19 |
 | **Alta manual** | n/a | Formulario en la web: pego una URL y se crea la ficha, pasando por el dedupe |
 
 Riesgos:
 - Show HN trae ruido (proyectos personales, librerías). Como no se filtra, la web tiene que permitir descartar rápido.
-- El MVP tiene una sola fuente automática (HN) más el alta manual. Las startups españolas o europeas van a llegar sobre todo por alta manual, hasta sumar otra fuente.
+- Show HN trae sobre todo proyectos personales que no contratan: de ~370 startups, solo 14 mostraban búsquedas en su web. Por eso se sumó "Who is hiring?", donde la búsqueda abierta es la razón por la que la empresa aparece.
+- Las fuentes automáticas son las dos de HN. Las startups españolas o europeas van a llegar sobre todo por alta manual, hasta sumar otra fuente.
+
+### HN Who is hiring
+
+El usuario `whoishiring` publica el hilo el primer día hábil de cada mes. Medido sobre los hilos de octubre y noviembre de 2026: ~245 comentarios de primer nivel por mes, el 89 % con el encabezado `Empresa | Rol | Ubicación | REMOTE`, y el 70-75 % con un link al dominio propio de la empresa.
+
+- **Qué lee**: los hilos de los últimos 45 días (los comentarios siguen llegando después del día 1) y, de cada uno, los comentarios de primer nivel. Las respuestas son conversaciones y se ignoran. La primera corrida lee solo el hilo más nuevo.
+- **Nombre**: el primer segmento del encabezado, sin paréntesis (`Lumbre Labs (YC W26)` → `Lumbre Labs`). Si la primera línea no tiene `|`, no es un aviso y se descarta.
+- **Descripción**: el encabezado completo (rol, ubicación, remoto). La ubicación no se parsea: el país sigue fuera del MVP.
+- **Web**, por confianza decreciente: (1) un link cuyo dominio coincide con el nombre de la empresa; (2) un link propio en el encabezado; (3) el dominio de un mail del aviso, salvo que sea un proveedor de correo (gmail, outlook…). Si nada de eso aparece, el aviso se descarta. **Nunca se toma "el primer link"**: notas de prensa, formularios o papers fusionarían empresas distintas bajo un mismo dominio. Por eso las plataformas de búsqueda (Ashby, Greenhouse, Workday…), los formularios (Typeform, Tally) y la prensa (TechCrunch…) no identifican a una startup.
+- **Prioridad en el merge**: la más baja. Si la empresa vino por Show HN, su tagline describe mejor el producto que "Senior Engineer | Remote".
+- **Límites**: se pierden los avisos que solo linkean a una plataforma de búsqueda (11-16 %); si alguien edita su aviso después (por ejemplo, "CLOSED"), no se relee; también postean empresas grandes, que no se filtran.
 
 ### Fuentes descartadas
 
@@ -35,29 +49,63 @@ Riesgos:
 |---|---|---|
 | **EU-Startups** | 2026-11-18 | Todo el dominio (sitio, robots.txt, feed RSS y API de WordPress) está detrás de un challenge de Cloudflare, y no tiene API oficial. Esquivar esa protección no es una opción |
 | **Startupxplore** | 2026-11-18 | Su robots.txt permite el acceso, pero sus **términos de uso (cláusulas 7.3 y 7.4) prohíben reproducir su base de datos, total o parcialmente, y usar su contenido sin consentimiento previo y por escrito**. Además, el sitio hoy está orientado al crowdfunding y el sitemap del directorio es de 2018. Se eliminó del código: la migración `sources/0003_remove_startupxplore` borra la fuente y la saca de los choices de `SourceKey`. Volver a sumarla requeriría su consentimiento escrito y un adaptador nuevo |
+| **yc-oss/api** | 2026-11-19 | JSON gratuito con las empresas de YC y un campo `isHiring`, pero **no es oficial**: sale del índice de Algolia que usa el sitio de YC, no de una API que YC ofrezca. Es la misma zona gris que Startupxplore. Además Launch HN ya cubre parte de YC |
+| **Remotive, RemoteOK, We Work Remotely** | 2026-11-19 | Son bolsas de empleo, no fuentes de startups, y sus APIs públicas ponen condiciones de uso (atribución, pocas consultas por día) |
+
+Pendiente: **Work at a Startup (YC)** requiere login; queda por investigar si hay una forma permitida de usarla.
 
 Lección para fuentes futuras: **robots.txt no alcanza**. Antes de escribir un adaptador HTML hay que leer los términos de uso del sitio.
 
 ### Fuentes en la base y mapeo en memoria
 
-- La tabla `Source` guarda cada fuente con una **clave estable** (`key`, slug único: `hacker_news`, `manual`), un nombre visible, `enabled` y su `config` (JSON).
+- La tabla `Source` guarda cada fuente con una **clave estable** (`key`, slug único: `hacker_news`, `hacker_news_hiring`, `manual`), un nombre visible, `enabled` y su `config` (JSON).
 - En código, `sources/registry.py` tiene un mapeo en memoria `SOURCE_ADAPTERS = {"hacker_news": HackerNewsAdapter, ...}`. Las claves van como constantes en `sources/constants.py`.
 - Para correr una fuente se lee el `Source` de la base, se busca su `key` en el mapeo y se instancia el adaptador con su `config`. **En la base nunca se guarda el nombre de una clase**: si se renombra o se mueve un adaptador, la base no se entera.
 - Si una `key` de la base no está en el mapeo, se lanza `UnknownSourceError` (en `exceptions.py`). Un test verifica que todas las fuentes sembradas tengan adaptador.
 - Las fuentes se crean con una data migration.
 
-## 3. Única regla de descarte automático: ubicación
+## 3. Señal de búsquedas abiertas (fase 3)
 
-Referencia: **Barcelona**, es decir `REFERENCE_TIMEZONE = "Europe/Madrid"` (en IANA no existe una zona propia para Barcelona) y `HOME_COUNTRY = "ES"`.
+**Objetivo:** marcar las startups cuya web sugiere que están contratando, porque son las que reviso primero. Es lo único que se detecta en esta etapa.
 
-- **Zona horaria**: se descarta si la diferencia con Barcelona es mayor a 5 h.
-  - El horario de verano cambia en fechas distintas según el país, así que la diferencia se calcula en dos fechas fijas (15 de enero y 15 de julio) y se usa **la menor**.
-  - En países con varias zonas se usa la más cercana.
-  - Ejemplos: Reino Unido 1 h (queda), Argentina 4–5 h (queda), costa este de EE.UU. 6 h (se descarta).
-- **País distinto y sin remoto**: se descarta solo si la startup no es de España **y** se sabe que no admite remoto. Al descubrirla, `remote_policy` casi siempre es `unknown`, y en ese caso no se descarta.
-- **Ubicación desconocida**: no se descarta; se marca para que la vea.
-- El descarte es **reversible**, guarda el motivo y queda en el historial. Las descartadas se ven con un filtro.
-- La regla es determinística: de país a zonas horarias con `zoneinfo`.
+**Postergado:** la detección de país y la regla de ubicación. HN no informa el país, y detectarlo desde la web suma complejidad para poco peso. Ninguna startup se descarta automáticamente por ahora. Los campos `country` y `remote_policy` siguen existiendo y se pueden cargar a mano.
+
+### Estrategia: la home primero, rutas típicas como fallback
+
+1. **Principal: la home (1 request).** Se descarga el HTML de la home y se analiza **completo**. La navegación de arriba y el footer de abajo vienen en el mismo documento, y son justamente donde suelen estar los links a "Careers" o "Jobs". Busca:
+   - **Links** cuyo texto o URL coincida con los patrones de búsqueda (abajo).
+   - **Links a plataformas de búsqueda** (abajo).
+   - **Frases** de búsqueda en el texto visible ("We're hiring", "Estamos contratando").
+2. **Fallback: rutas típicas (hasta 4 requests).** Solo si la home no dio señal: `/careers`, `/jobs`, `/join-us` y `/trabaja-con-nosotros`, en ese orden, deteniéndose en la primera que dé señal. Una ruta cuenta solo si:
+   - responde 200,
+   - **no** termina redirigiendo a la home (muchas webs mandan cualquier ruta inexistente a la home),
+   - y su contenido tiene alguna palabra de búsqueda.
+
+¿Por qué este orden? La home resuelve la mayoría de los casos con un solo request. El fallback cubre las webs donde el link no está en la home, o donde la home se arma con JavaScript y el HTML inicial viene casi vacío. Así no se le hacen requests de más a los sitios que ya mostraron la señal.
+
+### Qué cuenta como señal
+
+- **Links fuertes**: una URL con `careers`, `jobs`, `join-us`, `join-the-team`, `work-with-us`, `open-positions`, `empleo`, `trabaja-con-nosotros`, `unete` o `vacantes` en el path, o un texto de link como "Careers", "Jobs", "Join the team", "Join our team", "Work with us", "Open positions", "Open roles", "Trabaja con nosotros", "Únete al equipo", "Empleo" o "Vacantes".
+- **Plataformas de búsqueda**: links a Greenhouse, Lever, Ashby, Workable, Personio, Teamtailor, Recruitee, JOIN, Welcome to the Jungle, BambooHR, Work at a Startup (YC) o la sección de empleos de LinkedIn.
+- **Frases en el texto**: "We're hiring", "We are hiring", "Now hiring", "Join our team", "Estamos contratando" o "Buscamos talento".
+- **"Join us" a secas no alcanza**: suele ser "Join us on Discord" o "Join the waitlist". Cuenta solo si el link va a una ruta o plataforma de búsqueda.
+
+Se guarda **qué** disparó la señal (URL, texto y método: `home` o `path_probe`) como evidencia, para revisar los falsos positivos. Es una señal, no una certeza: una página de "Careers" puede no tener búsquedas activas.
+
+### Señal por aviso en "Who is hiring?"
+
+Una startup también tiene señal si publicó en "Who is hiring?" en los **últimos 60 días** (`HIRING_POST_MAX_AGE_DAYS`): un aviso viejo no dice nada sobre hoy. No se guarda un flag: se calcula con `Startup.objects.with_hiring_signal()`, que anota de dónde sale la señal (web, aviso o las dos). Para eso `SourceRecord` guarda `published_at`, la fecha en que la fuente publicó el aviso. La web de estas startups se inspecciona igual, porque la fase 4 saca de ahí los contactos.
+
+### Medición de SPA vacías
+
+La inspección no ejecuta JavaScript. Si la home es una SPA que arma el menú en el navegador, el link a "Careers" no está en el HTML y la startup queda sin señal. Para saber cuánto pesa esto antes de sumar un navegador headless, cada inspección guarda tres métricas de la home: largo del texto visible, cantidad de links y si tiene un contenedor de framework (`id="root"`, `__next`, `__nuxt`…). Una home es **probable SPA vacía** si tiene menos de 200 caracteres de texto, o un contenedor de framework con menos de 3 links. `inspect_websites --stats` las lista para revisarlas a mano en el navegador.
+
+### Cuándo y cómo corre
+
+- **Cuándo**: el runner encola la inspección cuando se crea una startup con dominio propio. El comando `inspect_websites` la corre sobre las que nunca se inspeccionaron, por ejemplo las ~370 que ya hay.
+- **robots.txt**: se respeta. Si no permite el acceso, la inspección queda `blocked` y no se insiste.
+- **Límites**: un request a la vez por sitio, con timeout y un User-Agent identificable. Como máximo 5 requests por sitio (home + 4 rutas).
+- **Reutilización**: en la fase 4, la misma inspección va a sumar la extracción de contactos.
 
 ## 4. Deduplicación y merge entre fuentes
 
@@ -151,17 +199,18 @@ flowchart LR
 - `Source`: key (slug único), name, enabled, config (JSON), created_at.
 - `Startup`: name, normalized_name (para detectar posibles duplicados), website, description, country, city, remote_policy (`unknown|remote|hybrid|onsite`), status, discard_reason, possible_duplicate_of (FK nullable), field_sources (JSON), first_seen_at, updated_at.
 - `StartupDomain`: startup, domain (unique), is_primary.
-- `SourceRecord`: startup, source (FK `Source`), external_id, url, data (JSON: los campos ya mapeados, de donde se recalcula el merge), payload (JSON crudo de la fuente), first_seen_at, fetched_at. Unique en `(source, external_id)`.
+- `SourceRecord`: startup, source (FK `Source`), external_id, url, data (JSON: los campos ya mapeados, de donde se recalcula el merge), payload (JSON crudo de la fuente), published_at (cuándo lo publicó la fuente, si lo informa), first_seen_at, fetched_at. Unique en `(source, external_id)`.
 - `SourceRun`: source (FK `Source`), started_at, finished_at, status, items_seen, items_new, error, cursor (JSON: el último `created_at` de HN o el set de URLs del sitemap).
+- `WebsiteInspection` (fase 3): startup (uno a uno), status (`pending|done|blocked|failed`), inspected_at, has_hiring_signal, hiring_signal_method (`home|path_probe`), hiring_signal_kind (`job_board|link_path|link_text|email|phrase`), hiring_signal_url, hiring_signal_text, home_text_length, home_link_count, home_has_app_root, error.
 - `Contact`: startup, full_name, role (`ceo|cto|founder|other|general`), email, profile_url, found_via (`source|website|manual`), evidence_url, status (`candidate|confirmed|rejected`).
 - `Analysis`: startup, title, body (markdown), sent_at (nullable), sent_to (FK `Contact`, nullable), created_at, updated_at.
 - `StatusChange`: startup, from_status, to_status, note, changed_at.
 
-**Estados de la startup**: `new → reviewing → analyzing → ready_to_contact → contacted → replied`, más `discarded` desde cualquier estado. Todos los cambios son manuales, salvo el descarte por ubicación y el paso a `contacted` al marcar un análisis como enviado.
+**Estados de la startup**: `new → reviewing → analyzing → ready_to_contact → contacted → replied`, más `discarded` desde cualquier estado. Todos los cambios son manuales, salvo el paso a `contacted` al marcar un análisis como enviado.
 
 ## 9. Pantallas
 
-- **Listado**: las más nuevas primero. Filtros por estado, fuente, país, "tiene contacto" y fecha; búsqueda por texto. Descarte rápido con motivo.
+- **Listado**: primero las que tienen señal de búsqueda abierta, y dentro de cada grupo las más nuevas. Filtros por estado, fuente, país, "tiene contacto" y fecha; búsqueda por texto. Descarte rápido con motivo.
 - **Ficha**: datos unificados con la procedencia de cada campo, dominios, registros de cada fuente, contactos (confirmar, rechazar o cargar a mano), análisis (crear, editar, eliminar, marcar o desmarcar como enviado) e historial de estados.
 - **Alta manual**: pegar una URL.
 - **Fusionar duplicados**: dos fichas lado a lado y confirmar.
@@ -176,8 +225,9 @@ Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revis
 | 0. Setup | Django + Postgres + Redis + huey en docker compose; ruff y pytest; GitHub Actions; README, LICENSE y `.env.example` | `docker compose up` levanta todo y la CI pasa |
 | 1. Dominio | Modelos, `Source` con data migration y registro en memoria, normalización de dominios, ingesta con dedupe, merge por prioridad y concurrencia | Tests de dedupe (www, subdominios, PaaS, redirects, mismo nombre sin web, ingestas concurrentes) y de `UnknownSourceError` |
 | 2. Fuentes ✅ | Adaptadores de HN (Algolia) y de alta manual; runner con `SourceRun`; tareas periódicas; comando `run_source`. Startupxplore se descartó por sus términos (§2) | Corridas diarias que traen startups reales sin duplicados; los tests usan fixtures ficticios, sin red |
-| 3. Regla de ubicación | País → zonas horarias contra `Europe/Madrid`; descarte reversible con motivo | Tests por país: multi-zona, horario de verano, desconocido, sin remoto |
-| 4. Contactos | Extractor desde la web de la startup (mailto, LinkedIn, JSON-LD, cargos) y autor de HN; respeto de robots.txt | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
+| 3. Búsquedas abiertas ✅ | `WebsiteInspection`: la home como estrategia principal y las rutas típicas como fallback, respetando robots.txt. Se encola al crear una startup; comando `inspect_websites` para las existentes | Tests con HTML ficticio (link en el nav o el footer, plataforma de búsqueda, frase, "Join us on Discord" que no cuenta, fallback por ruta, redirect a la home que no cuenta, robots.txt, SPA vacía). Corrida real sobre las startups que ya hay, midiendo cuántas tienen señal y revisando una muestra a mano |
+| 3b. Who is hiring ✅ | Adaptador de "Ask HN: Who is hiring?"; señal por aviso reciente; métricas de la home y `inspect_websites --stats` para medir las SPA | Tests con un hilo ficticio. Corrida real sobre el hilo de noviembre de 2026 (§5.4 de la arquitectura) |
+| 4. Contactos | Se suma a la misma inspección de la fase 3: mailto, LinkedIn, JSON-LD y cargos en `/about`, `/team`, etc., más el autor de HN | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
 | 5. Frontend | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |
 
 **MVP terminado** cuando corre una semana solo, descubriendo cada día, y yo hago el ciclo completo con al menos una startup: la reviso, escribo el análisis, tomo el contacto de la ficha, se lo mando desde mi casilla y lo marco como enviado.

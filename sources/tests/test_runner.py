@@ -36,9 +36,10 @@ class BrokenSourceAdapter(SourceAdapter):
         raise SourceFetchError("API down")
 
 
-def build_runner():
+def build_runner(on_startup_created=None):
     return SourceRunner(
-        ingestion_service=StartupIngestionService(redirect_resolver=FakeRedirectResolver())
+        ingestion_service=StartupIngestionService(redirect_resolver=FakeRedirectResolver()),
+        on_startup_created=on_startup_created or mock.Mock(),
     )
 
 
@@ -87,7 +88,7 @@ def test_failed_fetch_marks_run_as_failed_and_keeps_previous_cursor():
 
 def test_one_failing_startup_does_not_stop_the_run():
     service = StartupIngestionService(redirect_resolver=FakeRedirectResolver())
-    runner = SourceRunner(ingestion_service=service)
+    runner = SourceRunner(ingestion_service=service, on_startup_created=mock.Mock())
     original_ingest = service.ingest
     calls = []
 
@@ -107,3 +108,13 @@ def test_one_failing_startup_does_not_stop_the_run():
     assert source_run.status == SourceRunStatus.SUCCEEDED
     assert source_run.items_new == 1
     assert "boom" in source_run.error
+
+
+def test_only_created_startups_are_handed_to_the_creation_hook():
+    on_startup_created = mock.Mock()
+    with mock.patch.dict(registry.SOURCE_ADAPTERS, {SourceKey.HACKER_NEWS: StaticSourceAdapter}):
+        build_runner(on_startup_created).run(hacker_news_source())
+        build_runner(on_startup_created).run(hacker_news_source())
+
+    created_names = sorted(call.args[0].name for call in on_startup_created.call_args_list)
+    assert created_names == ["Acme", "Brisa"]

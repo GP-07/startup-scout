@@ -1,0 +1,99 @@
+{
+  "hits": [
+    {
+      "objectID": "9100001",
+      "comment_text": "Lumbre Labs (YC W26) | Backend Engineer | Barcelona | REMOTE (EU)<p>We help small shops get paid on time. Apply at <a href=\"https:&#x2F;&#x2F;jobs.ashbyhq.com&#x2F;lumbre\" rel=\"nofollow\">https:&#x2F;&#x2F;jobs.ashbyhq.com&#x2F;lumbre</a> or read more at <a href=\"https:&#x2F;&#x2F;www.lumbrelabs.com&#x2F;about\" rel=\"nofollow\">https:&#x2F;&#x2F;www.lumbrelabs.com&#x2F;about</a>",
+      "author": "fictional_recruiter_1",
+      "created_at": "2026-11-02T16:05:00Z",
+      "created_at_i": 1793635500,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_recruiter_1", "story_8000001"],
+      "_highlightResult": {"comment_text": {"value": "ignored"}}
+    },
+    {
+      "objectID": "9100002",
+      "comment_text": "Quanta Robotics | Firmware Engineer | ONSITE | <a href=\"https:&#x2F;&#x2F;qrbt.com\" rel=\"nofollow\">https:&#x2F;&#x2F;qrbt.com</a><p>Featured in <a href=\"https:&#x2F;&#x2F;fictional-news-site.com&#x2F;robots\" rel=\"nofollow\">this article</a>.",
+      "author": "fictional_founder_2",
+      "created_at": "2026-11-02T16:10:00Z",
+      "created_at_i": 1793635800,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_founder_2", "story_8000001"]
+    },
+    {
+      "objectID": "9100003",
+      "comment_text": "Nimbo | Data Engineer | Madrid<p>Send your CV to jobs@nimbohq.com",
+      "author": "fictional_founder_3",
+      "created_at": "2026-11-02T16:20:00Z",
+      "created_at_i": 1793636400,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_founder_3", "story_8000001"]
+    },
+    {
+      "objectID": "9100004",
+      "comment_text": "Solo Dev Shop | Contractor | REMOTE<p>Email me at someone.fictional@gmail.com",
+      "author": "fictional_dev_4",
+      "created_at": "2026-11-02T16:30:00Z",
+      "created_at_i": 1793637000,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_dev_4", "story_8000001"]
+    },
+    {
+      "objectID": "9100005",
+      "comment_text": "Pequeña | Engineer | REMOTE<p>Apply: <a href=\"https:&#x2F;&#x2F;jobs.lever.co&#x2F;pequena\" rel=\"nofollow\">https:&#x2F;&#x2F;jobs.lever.co&#x2F;pequena</a>",
+      "author": "fictional_founder_5",
+      "created_at": "2026-11-02T16:40:00Z",
+      "created_at_i": 1793637600,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_founder_5", "story_8000001"]
+    },
+    {
+      "objectID": "9100006",
+      "comment_text": "there used to be many more posts here",
+      "author": "fictional_reader_6",
+      "created_at": "2026-11-02T16:50:00Z",
+      "created_at_i": 1793638200,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_reader_6", "story_8000001"]
+    },
+    {
+      "objectID": "9100007",
+      "comment_text": "Is this role open to people in the EU? | asking for a friend",
+      "author": "fictional_reader_7",
+      "created_at": "2026-11-02T17:00:00Z",
+      "created_at_i": 1793638800,
+      "parent_id": 9100001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_reader_7", "story_8000001"]
+    },
+    {
+      "objectID": "9100008",
+      "comment_text": null,
+      "author": null,
+      "created_at": "2026-11-02T17:10:00Z",
+      "created_at_i": 1793639400,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "story_8000001"]
+    },
+    {
+      "objectID": "9100009",
+      "comment_text": "Ventisca | Engineer | REMOTE<p>Read about us: <a href=\"https:&#x2F;&#x2F;fictional-news-site.com&#x2F;ventisca\" rel=\"nofollow\">article</a>",
+      "author": "fictional_founder_9",
+      "created_at": "2026-11-02T17:20:00Z",
+      "created_at_i": 1793640000,
+      "parent_id": 8000001,
+      "story_id": 8000001,
+      "_tags": ["comment", "author_fictional_founder_9", "story_8000001"]
+    }
+  ],
+  "nbHits": 9,
+  "page": 0,
+  "nbPages": 1,
+  "hitsPerPage": 100
+}

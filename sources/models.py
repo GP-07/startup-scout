@@ -28,6 +28,8 @@ class SourceRecord(models.Model):
     url = models.URLField(max_length=500, blank=True)
     data = models.JSONField(default=dict, blank=True)
     payload = models.JSONField(default=dict, blank=True)
+    # When the source published it (a post, a comment). Null if the source does not say.
+    published_at = models.DateTimeField(null=True, blank=True)
     first_seen_at = models.DateTimeField(auto_now_add=True)
     fetched_at = models.DateTimeField(auto_now=True)
 

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 
 from sources.constants import SourceKey
@@ -220,3 +222,16 @@ def test_redirect_to_platform_is_not_used_as_alias():
     ).startup
 
     assert list(startup.domains.values_list("domain", flat=True)) == ["acme.com"]
+
+
+def test_source_record_keeps_when_the_source_published_it():
+    published_at = datetime(2026, 11, 2, 16, 5, tzinfo=UTC)
+
+    build_service().ingest(
+        get_source(SourceKey.HACKER_NEWS_HIRING),
+        build_raw_startup(
+            "hiring-1", "Acme", website="https://acme.com", published_at=published_at
+        ),
+    )
+
+    assert SourceRecord.objects.get(external_id="hiring-1").published_at == published_at

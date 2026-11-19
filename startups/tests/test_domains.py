@@ -58,6 +58,7 @@ def test_normalize_name_ignores_case_accents_punctuation_and_legal_suffixes(name
         ("https://www.acme.itch.io", "acme.itch.io"),
         ("https://acme.medium.com", "acme.medium.com"),
         ("https://medium.com/@acme/launch", "medium.com"),
+        ("https://acme-app.bolt.host", "acme-app.bolt.host"),
     ],
 )
 def test_sites_hosted_as_subdomains_of_shared_hosts_keep_their_subdomain(website, expected_domain):
@@ -73,6 +74,14 @@ def test_sites_hosted_as_subdomains_of_shared_hosts_keep_their_subdomain(website
         "https://www.youtube.com/watch?v=abc",
         "https://medium.com/@acme/launch",
         "https://x.com/acme",
+        "https://plugins.jetbrains.com/plugin/123-acme",
+        "https://marketplace.visualstudio.com/items?itemName=acme.acme",
+        "https://vercel.com/templates/next.js/acme",
+        "https://jobs.ashbyhq.com/acme",
+        "https://grnh.se/abc123",
+        "https://acme.wd1.myworkdayjobs.com/External",
+        "https://acme.typeform.com/to/apply",
+        "https://techcrunch.com/2026/11/02/acme-raises",
     ],
 )
 def test_platform_domains_do_not_identify_a_startup(website):

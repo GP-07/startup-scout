@@ -17,6 +17,7 @@ Python 3.12 · Django 5.2 · PostgreSQL · huey + Redis · Django templates + HT
 | Source | Access |
 |---|---|
 | Hacker News (Show HN / Launch HN) | Public Algolia API |
+| Hacker News "Ask HN: Who is hiring?" (companies hiring) | Public Algolia API |
 | Manual | Paste a URL in the web UI |
 
 A startup exists once, whatever the number of sources that mention it: identity is the
@@ -37,6 +38,26 @@ Run a source now instead of waiting for the daily 07:00 task:
 
 ```bash
 docker compose run --rm web python manage.py run_source hacker_news
+docker compose run --rm web python manage.py run_source hacker_news_hiring
+```
+
+Inspect the websites of the startups already loaded (new ones are inspected automatically):
+
+```bash
+docker compose run --rm web python manage.py inspect_websites
+```
+
+List the inspections without a hiring signal whose home looks like an empty single-page-app
+shell, to check them by hand (inspections made before these metrics existed need `--all` first):
+
+```bash
+docker compose run --rm web python manage.py inspect_websites --stats
+```
+
+If you add platforms to the identity rules, clean up the domains already stored first:
+
+```bash
+docker compose run --rm web python manage.py prune_platform_domains
 ```
 
 ## Tests and lint
@@ -51,7 +72,8 @@ docker compose run --rm web ruff check .
 - [x] Phase 0 — project setup, docker compose, CI
 - [x] Phase 1 — domain model, source registry, ingestion with deduplication and merge
 - [x] Phase 2 — source adapters (Hacker News, manual), runner, daily huey task
-- [ ] Phase 3 — location rule
+- [x] Phase 3 — hiring signal (careers / jobs section on the startup's website)
+- [x] Phase 3b — "Who is hiring?" source, hiring signal from recent posts, single-page-app metrics
 - [ ] Phase 4 — contacts from the startup's own website
 - [ ] Phase 5 — web UI
 
