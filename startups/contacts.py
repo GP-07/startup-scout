@@ -13,7 +13,9 @@ def save_contacts(startup, candidates, found_via):
     """
     created = 0
     for candidate in candidates:
-        existing_contact = _find_existing(startup, candidate)
+        existing_contact = find_matching_contact(
+            startup, candidate.email, candidate.profile_url, candidate.full_name
+        )
         if existing_contact is None:
             Contact.objects.create(
                 startup=startup,
@@ -30,14 +32,15 @@ def save_contacts(startup, candidates, found_via):
     return created
 
 
-def _find_existing(startup, candidate):
+def find_matching_contact(startup, email, profile_url, full_name):
+    """The startup's contact with the same email, profile or name, or None."""
     same_contact = Q()
-    if candidate.email:
-        same_contact |= Q(email__iexact=candidate.email)
-    if candidate.profile_url:
-        same_contact |= Q(profile_url=candidate.profile_url)
-    if candidate.full_name:
-        same_contact |= Q(full_name__iexact=candidate.full_name)
+    if email:
+        same_contact |= Q(email__iexact=email)
+    if profile_url:
+        same_contact |= Q(profile_url=profile_url)
+    if full_name:
+        same_contact |= Q(full_name__iexact=full_name)
     if not same_contact:
         return None
     return startup.contacts.filter(same_contact).order_by("id").first()

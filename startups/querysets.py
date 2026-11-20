@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from sources.constants import SourceKey
 from sources.models import SourceRecord
-from startups.constants import HIRING_POST_MAX_AGE_DAYS
+from startups.constants import HIRING_POST_MAX_AGE_DAYS, KEY_CONTACT_ROLES, ContactStatus
 
 
 class StartupQuerySet(models.QuerySet):
@@ -32,6 +32,15 @@ class StartupQuerySet(models.QuerySet):
                 Q(has_website_hiring_signal=True) | Q(has_recent_hiring_post=True)
             ),
         )
+
+    def with_key_contact(self):
+        """Annotate `has_key_contact`: a CEO, CTO, founder or general mailbox not rejected."""
+        # Resolved through the relation: startups.models imports this module.
+        contact_model = self.model._meta.get_field("contacts").related_model
+        key_contacts = contact_model.objects.filter(
+            startup=OuterRef("pk"), role__in=KEY_CONTACT_ROLES
+        ).exclude(status=ContactStatus.REJECTED)
+        return self.annotate(has_key_contact=Exists(key_contacts))
 
 
 def _true_when(condition):

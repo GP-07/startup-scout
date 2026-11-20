@@ -1,0 +1,41 @@
+<section>
+  <h2>Contactos</h2>
+  <table class="contacts">
+    <thead><tr><th>Nombre</th><th>Cargo</th><th>Mail / perfil</th><th>Origen</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for contact in contacts %}
+      <tr class="contact-{{ contact.status }}">
+        <td>{{ contact.full_name|default:"—" }}</td>
+        <td>{{ contact.get_role_display }}</td>
+        <td>
+          {% if contact.email %}<a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}
+          {% if contact.profile_url %}{% if contact.email %}<br>{% endif %}<a href="{{ contact.profile_url }}" target="_blank" rel="noopener noreferrer">{{ contact.profile_url|truncatechars:50 }}</a>{% endif %}
+        </td>
+        <td>
+          {{ contact.get_found_via_display }}
+          {% if contact.evidence_url %}<br><a class="muted" href="{{ contact.evidence_url }}" target="_blank" rel="noopener noreferrer">evidencia</a>{% endif %}
+        </td>
+        <td>{{ contact.get_status_display }}</td>
+        <td class="actions">
+          {% if contact.status != 'confirmed' %}
+            <button hx-post="{% url 'web:contact_review' contact.pk %}" hx-vals='{"status": "confirmed"}' hx-target="#contacts">Confirmar</button>
+          {% endif %}
+          {% if contact.status != 'rejected' %}
+            <button hx-post="{% url 'web:contact_review' contact.pk %}" hx-vals='{"status": "rejected"}' hx-target="#contacts">Descartar</button>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted">Sin contactos. Podés cargar uno a mano.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <h3>Cargar a mano</h3>
+  <form class="inline-form" hx-post="{% url 'web:contact_create' startup.pk %}" hx-target="#contacts">
+    {{ contact_form.non_field_errors }}
+    {% for field in contact_form %}
+      <label>{{ field.label }} {{ field }}</label>
+    {% endfor %}
+    <button type="submit">Agregar</button>
+  </form>
+</section>

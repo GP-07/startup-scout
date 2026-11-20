@@ -1,0 +1,27 @@
+{% extends "web/base.html" %}
+{% block title %}Comparar duplicados · startup-scout{% endblock %}
+{% block content %}
+<p><a href="{% url 'web:duplicate_list' %}">← Duplicados</a></p>
+<h1>¿Son la misma startup?</h1>
+<div class="columns">
+  {% for item in pair %}
+  <section class="card">
+    <h2><a href="{% url 'web:startup_detail' item.startup.pk %}">{{ item.startup.name }}</a></h2>
+    <p>{{ item.startup.website|default:"Sin web" }}</p>
+    <p class="muted">{{ item.startup.description|truncatechars:200 }}</p>
+    <p>Dominios: {{ item.domains|join:", "|default:"—" }}</p>
+    <p>Fuentes: {% for record in item.source_records %}{{ record.source.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+    <p>{{ item.contact_count }} contactos · {{ item.analysis_count }} análisis · {{ item.startup.get_status_display }}</p>
+    <form method="post" action="{% url 'web:duplicate_merge' flagged.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="keep" value="{{ item.startup.pk }}">
+      <button type="submit">Fusionar conservando esta</button>
+    </form>
+  </section>
+  {% endfor %}
+</div>
+<form method="post" action="{% url 'web:duplicate_dismiss' flagged.pk %}">
+  {% csrf_token %}
+  <button type="submit">No son la misma</button>
+</form>
+{% endblock %}

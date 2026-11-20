@@ -6,12 +6,13 @@ Este documento explica qué hace cada parte del código y cómo fluye una startu
 
 startup-scout tiene una sola responsabilidad: **mantener una lista de startups sin duplicados y con historial**, alimentada por varias fuentes, para que yo las revise y contacte a mano.
 
-El código se organiza en dos apps de Django con responsabilidades separadas:
+El código se organiza en tres apps de Django con responsabilidades separadas:
 
 | App | Responsabilidad | Sabe de… | No sabe de… |
 |---|---|---|---|
 | `sources` | **De dónde vienen los datos.** Qué fuentes existen, cómo leer cada una y qué reportó cada una | Fuentes, adaptadores, corridas, registros crudos | Cómo se identifica o se fusiona una startup |
 | `startups` | **Qué es una startup para nosotros.** Identidad, deduplicación, merge, contactos, análisis y estados | Startups, dominios, merge, ingesta | Cómo se lee cada fuente en particular |
+| `web` | **La interfaz.** Pantallas con Django templates y HTMX | Formularios, vistas, templates | Reglas de negocio: llama a los servicios de `startups` y `sources` |
 
 El contrato entre las dos es el dataclass `RawStartup`. Cada adaptador traduce su fuente a `RawStartup`, y la ingesta solo conoce ese formato. Agregar una fuente no toca nada de `startups`.
 
@@ -44,6 +45,9 @@ startup-scout/
 │   ├── hiring_signal.py    Detección de búsquedas abiertas en un HTML (funciones puras)
 │   ├── contact_extraction.py  Contactos en un HTML: mailto, LinkedIn, JSON-LD, cargos (funciones puras)
 │   ├── contacts.py         save_contacts: guarda candidatos sin duplicar ni pisar lo revisado
+│   ├── status.py           change_status / discard_startup: estados con historial
+│   ├── analyses.py         Marcar y desmarcar un análisis como enviado
+│   ├── duplicates.py       merge_startups / dismiss_duplicate
 │   ├── page_metrics.py     Métricas de la home y regla de "probable SPA vacía"
 │   ├── inspection_stats.py Cuántas inspecciones sin señal son probables SPA vacías
 │   ├── website_inspection.py  WebsiteInspectionService: visita la web, robots.txt, fallback
@@ -56,6 +60,13 @@ startup-scout/
 │   ├── exceptions.py       InvalidWebsiteError, IngestionConflictError
 │   ├── migrations/
 │   └── tests/
+├── web/                    App de la interfaz
+│   ├── views/              startups, contacts, analyses, duplicates, runs
+│   ├── forms.py            Filtros, estados, contactos, análisis, alta manual, fusión
+│   ├── filters.py          Consulta y filtros del listado
+│   ├── templatetags/       Markdown sanitizado y nombres de fuentes
+│   ├── templates/web/      Páginas y fragmentos (partials) para HTMX
+│   └── static/web/         CSS
 └── docs/
 ```
 
@@ -267,6 +278,13 @@ El resultado de visitar la web propia de una startup. Hay uno por startup (`OneT
 - **`contacts.save_contacts(startup, candidates, found_via)`**: crea los candidatos nuevos con estado `candidate`. Si el contacto ya existe en esa startup (mismo mail, perfil o nombre, sin importar cómo se encontró), solo completa sus campos vacíos: no cambia nombre, rol ni estado, así una nueva inspección no deshace lo que confirmé o rechacé.
 - **Migración `startups/0005`**: crea los contactos de los autores de HN de los registros ya cargados, a partir del `author` del payload.
 
+### 3.14 Servicios que usa la web: `status.py`, `analyses.py`, `duplicates.py` y `sources/manual_entry.py`
+
+- **`change_status(startup, to_status, note)`**: cambia el estado y deja un `StatusChange`. Descartar exige motivo (`DiscardReasonRequiredError`) y lo guarda en `discard_reason`; salir de `discarded` lo limpia. `discard_startup` es el atajo del listado.
+- **`mark_analysis_sent(analysis, sent_at, sent_to)`**: guarda fecha y contacto (que tiene que ser de la misma startup: `ForeignContactError`) y pasa la startup a `contacted`, salvo que ya esté en `contacted` o `replied`. `unmark_analysis_sent` deshace la marca sin tocar el historial.
+- **`merge_startups(kept, duplicate)`**: mueve dominios (como alias), registros, análisis e historial; los contactos se unifican con `find_matching_contact` (el de la conservada gana y completa campos vacíos); la inspección de la conservada gana. Los posibles duplicados que apuntaban a la borrada pasan a apuntar a la conservada. Al final recalcula el merge. `dismiss_duplicate` borra la marca.
+- **`add_startup_manually(website, name)`** (`sources/manual_entry.py`): arma el `RawStartup` con `ManualSourceAdapter`, lo ingresa como fuente `manual` (mismo dedupe que el resto) y, si la startup es nueva, encola la inspección de su web.
+
 ## 4. Configuración relevante
 
 | Setting / constante | Dónde | Para qué |
@@ -308,7 +326,7 @@ flowchart TD
 | Ingesta: dedupe, merge y concurrencia | **Implementado (fase 1)** |
 | Señal de búsquedas abiertas | **Implementado (fase 3)** |
 | Extracción de contactos | **Implementado (fase 4)** |
-| Web: listado, ficha, análisis, estados | Pendiente (fase 5) |
+| Web: listado, ficha, análisis, estados | **Implementado (fase 5)**, ver §6 |
 
 ### 5.2 Ingesta de una startup (implementado)
 
@@ -447,7 +465,22 @@ stateDiagram-v2
 
 Todos los cambios son manuales, salvo el paso a `contacted` al marcar un análisis como enviado. Cada cambio deja un `StatusChange`.
 
-## 6. Tests
+## 6. Web (fase 5)
+
+Django templates con HTMX (cargado desde unpkg, versión fija). Todas las páginas piden sesión (`LoginRequiredMiddleware`, login del admin). Las vistas solo validan formularios y llaman a los servicios de §3.14.
+
+| Página | URL | Qué hace |
+|---|---|---|
+| Listado | `/` | Primero las que tienen búsquedas abiertas, después las más nuevas, de a 50. Filtros por texto (nombre, web, descripción, dominio), estado (sin filtro oculta las descartadas), fuente, país, búsquedas abiertas, "tiene contacto" (CEO, CTO, founder o mail general no rechazado) y fecha. HTMX reemplaza solo los resultados y deja los filtros en la URL. Descarte rápido con motivo en cada fila |
+| Ficha | `/startups/<id>/` | Estado con historial y cambio de estado; datos con la fuente de cada campo; dominios; evidencia de búsquedas abiertas (web y avisos); contactos (confirmar, descartar, cargar a mano); análisis; registros de cada fuente |
+| Análisis | `/startups/<id>/analyses/new/`, `/analyses/<id>/edit/` | Formulario con título y Markdown. En la ficha: marcar como enviado (fecha y contacto), desmarcar y eliminar con confirmación (avisa si ya estaba enviado). Al marcar como enviado la página se recarga, porque cambia el estado |
+| Alta manual | `/startups/new/` | Pegar una URL. Si ya existía, lleva a su ficha |
+| Duplicados | `/duplicates/`, `/duplicates/<id>/` | Lista de posibles duplicados, comparación lado a lado, fusionar eligiendo cuál conservar o marcar que son distintas |
+| Corridas | `/runs/` | Últimas 20 corridas de cada fuente, con vistas, nuevas y errores |
+
+Las respuestas 400 de validación también se insertan en la página (configuración `htmx-config` en `base.html`), así los formularios muestran sus errores.
+
+## 7. Tests
 
 Cada app tiene sus tests en `<app>/tests/`, con sus propios fakes:
 
@@ -469,6 +502,13 @@ Cada app tiene sus tests en `<app>/tests/`, con sus propios fakes:
 | `startups/tests/test_domain_cleanup.py` | Un dominio de plataforma se borra junto con su inspección; un host compartido se reemplaza por el subdominio de la startup; los dominios propios no se tocan; el alias propio pasa a principal |
 | `startups/tests/test_contact_extraction.py` | Mails del sitio, genéricos y personales; mails de otros dominios y de búsquedas ignorados; tarjetas de equipo con cargo y LinkedIn; nombre y cargo en una línea; palabras de cargo sin persona; JSON-LD; LinkedIn suelto y de empresa; unificación; cargos; links a páginas de contacto |
 | `startups/tests/test_contacts.py` | Alta de candidatos con evidencia; un contacto conocido solo completa campos vacíos y conserva su estado; no se mezclan startups |
+| `startups/tests/test_status.py` | Cambio de estado con historial, mismo estado sin registro, descarte con motivo obligatorio, revertir un descarte |
+| `startups/tests/test_analyses.py` | Marcar como enviado (fecha, contacto, paso a `contacted`), fecha por defecto, startup que ya respondió, contacto de otra startup, desmarcar |
+| `startups/tests/test_duplicates.py` | Fusión completa y recálculo, contactos sin duplicar, inspección y posibles duplicados reapuntados, fusionar consigo misma, descartar la marca |
+| `sources/tests/test_manual_entry.py` | Alta nueva con inspección encolada, web ya conocida, URL inválida |
+| `web/tests/test_startup_list.py` | Login obligatorio, orden, descartadas ocultas, cada filtro, respuesta parcial de HTMX, descarte rápido, fuentes en cada fila |
+| `web/tests/test_startup_detail.py` | Ficha con procedencia y contactos, cambio de estado, descarte sin motivo, contactos (confirmar y cargar a mano), ciclo completo de un análisis, Markdown sin HTML crudo |
+| `web/tests/test_other_pages.py` | Alta manual (nueva e inválida), duplicados (listar, comparar, fusionar, descartar), corridas |
 | `startups/tests/test_hiring_status.py` | Señal por aviso reciente, aviso viejo, aviso de otra fuente, señal de la web, las dos; filtro y orden del admin |
 | `startups/tests/test_page_metrics.py` | Texto visible, links y contenedores de framework; regla de probable SPA vacía |
 | `startups/tests/test_inspection_stats.py` | Conteo de probables SPA vacías y de inspecciones sin métricas; `inspect_websites --stats` no inspecciona |

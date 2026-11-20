@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "huey.contrib.djhuey",
     "sources",
     "startups",
+    "web",
 ]
 
 MIDDLEWARE = [
@@ -33,6 +34,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Single-user app: every page needs a session. Log in with a Django superuser.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -71,6 +74,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+
+LOGIN_URL = "admin:login"
 
 HUEY = {
     "huey_class": "huey.RedisHuey",

@@ -1,0 +1,107 @@
+{% extends "web/base.html" %}
+{% block title %}{{ startup.name }} · startup-scout{% endblock %}
+{% block content %}
+<p><a href="{% url 'web:startup_list' %}">← Startups</a></p>
+<h1>{{ startup.name }}</h1>
+<p>
+  {% if startup.website %}<a href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website }}</a> · {% endif %}
+  <strong>{{ startup.get_status_display }}</strong>
+  {% if startup.discard_reason %}<span class="muted">({{ startup.discard_reason }})</span>{% endif %}
+  {% if startup.has_hiring_signal %}
+    · <span class="badge badge-hiring">Búsquedas abiertas{% if startup.has_website_hiring_signal %} · web{% endif %}{% if startup.has_recent_hiring_post %} · Who is hiring{% endif %}</span>
+  {% endif %}
+</p>
+
+{% if startup.possible_duplicate_of or possible_duplicates %}
+<p class="message message-warning">
+  Posible duplicado:
+  {% if startup.possible_duplicate_of %}
+    <a href="{% url 'web:duplicate_compare' startup.pk %}">comparar con {{ startup.possible_duplicate_of.name }}</a>
+  {% endif %}
+  {% for other in possible_duplicates %}
+    <a href="{% url 'web:duplicate_compare' other.pk %}">comparar con {{ other.name }}</a>
+  {% endfor %}
+</p>
+{% endif %}
+
+<div class="columns">
+  <section>
+    <h2>Estado</h2>
+    <form method="post" action="{% url 'web:startup_status' startup.pk %}" class="stacked">
+      {% csrf_token %}
+      {{ status_form.status }}
+      <input name="note" placeholder="Nota (obligatoria para descartar)" maxlength="255">
+      <button type="submit">Cambiar</button>
+    </form>
+    <h3>Historial</h3>
+    <ul class="plain">
+      {% for change in status_changes %}
+        <li>{{ change.changed_at|date:"d/m/Y H:i" }} · {{ change.get_from_status_display }} → <strong>{{ change.get_to_status_display }}</strong>{% if change.note %} · {{ change.note }}{% endif %}</li>
+      {% empty %}
+        <li class="muted">Sin cambios todavía.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <h2>Datos</h2>
+    <table class="fields">
+      {% for field in merged_fields %}
+        <tr><th>{{ field.label }}</th><td>{{ field.value|default:"—" }}</td><td class="muted">{{ field.source }}</td></tr>
+      {% endfor %}
+    </table>
+    <h3>Dominios</h3>
+    <p>{% for domain in domains %}{{ domain.domain }}{% if domain.is_primary %} (principal){% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">Sin dominio propio.</span>{% endfor %}</p>
+  </section>
+</div>
+
+<section>
+  <h2>Búsquedas abiertas</h2>
+  {% if inspection %}
+    <p>
+      Web: {{ inspection.get_status_display }}{% if inspection.inspected_at %} el {{ inspection.inspected_at|date:"d/m/Y" }}{% endif %}.
+      {% if inspection.has_hiring_signal %}
+        Señal: <a href="{{ inspection.hiring_signal_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.hiring_signal_text|default:inspection.hiring_signal_url }}</a>
+        <span class="muted">({{ inspection.get_hiring_signal_kind_display }}, {{ inspection.get_hiring_signal_method_display }})</span>
+      {% elif inspection.status == 'done' %}
+        Sin señal en la web.
+      {% endif %}
+      {% if inspection.error %}<span class="muted">{{ inspection.error|truncatechars:120 }}</span>{% endif %}
+    </p>
+  {% else %}
+    <p class="muted">La web no se inspeccionó (no tiene dominio propio).</p>
+  {% endif %}
+  {% for record in hiring_posts %}
+    <p>Aviso en Who is hiring del {{ record.published_at|date:"d/m/Y" }}: <a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.data.description|truncatechars:140 }}</a></p>
+  {% endfor %}
+</section>
+
+<div id="contacts">
+  {% include "web/partials/contacts.html" %}
+</div>
+
+<section>
+  <h2>Análisis</h2>
+  <p><a class="button" href="{% url 'web:analysis_create' startup.pk %}">Nuevo análisis</a></p>
+  <div id="analyses">
+    {% include "web/partials/analyses.html" %}
+  </div>
+</section>
+
+<section>
+  <h2>Fuentes</h2>
+  <table>
+    <thead><tr><th>Fuente</th><th>Publicado</th><th>Visto</th><th>Nombre / descripción</th></tr></thead>
+    <tbody>
+    {% for record in source_records %}
+      <tr>
+        <td>{% if record.url %}<a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.source.name }}</a>{% else %}{{ record.source.name }}{% endif %}</td>
+        <td>{{ record.published_at|date:"d/m/Y"|default:"—" }}</td>
+        <td>{{ record.first_seen_at|date:"d/m/Y" }}</td>
+        <td>{{ record.data.name }}{% if record.data.description %} · <span class="muted">{{ record.data.description|truncatechars:140 }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

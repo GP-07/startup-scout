@@ -1,0 +1,20 @@
+{% extends "web/base.html" %}
+{% block title %}Duplicados · startup-scout{% endblock %}
+{% block content %}
+<h1>Posibles duplicados</h1>
+<p class="muted">La ingesta nunca fusiona sola: marca como posible duplicado a las startups con el mismo nombre o con dominios cruzados.</p>
+<table>
+  <thead><tr><th>Startup</th><th>Posible duplicado de</th><th></th></tr></thead>
+  <tbody>
+  {% for startup in flagged_startups %}
+    <tr>
+      <td><a href="{% url 'web:startup_detail' startup.pk %}">{{ startup.name }}</a> <span class="muted">{{ startup.website }}</span></td>
+      <td><a href="{% url 'web:startup_detail' startup.possible_duplicate_of.pk %}">{{ startup.possible_duplicate_of.name }}</a> <span class="muted">{{ startup.possible_duplicate_of.website }}</span></td>
+      <td><a href="{% url 'web:duplicate_compare' startup.pk %}">Comparar</a></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="3" class="muted">No hay posibles duplicados.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

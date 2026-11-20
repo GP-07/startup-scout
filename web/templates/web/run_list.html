@@ -1,0 +1,27 @@
+{% extends "web/base.html" %}
+{% block title %}Corridas · startup-scout{% endblock %}
+{% block content %}
+<h1>Corridas por fuente</h1>
+{% for item in sources %}
+<section>
+  <h2>{{ item.source.name }}{% if not item.source.enabled %} <span class="muted">(deshabilitada)</span>{% endif %}</h2>
+  <table>
+    <thead><tr><th>Inicio</th><th>Fin</th><th>Estado</th><th>Vistas</th><th>Nuevas</th><th>Errores</th></tr></thead>
+    <tbody>
+    {% for run in item.runs %}
+      <tr class="run-{{ run.status }}">
+        <td>{{ run.started_at|date:"d/m/Y H:i" }}</td>
+        <td>{{ run.finished_at|date:"H:i"|default:"—" }}</td>
+        <td>{{ run.get_status_display }}</td>
+        <td>{{ run.items_seen }}</td>
+        <td>{{ run.items_new }}</td>
+        <td>{% if run.error %}<pre class="error">{{ run.error|truncatechars:500 }}</pre>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted">Todavía no corrió.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% endblock %}

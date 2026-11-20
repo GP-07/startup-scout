@@ -217,6 +217,14 @@ flowchart LR
 - **Fusionar duplicados**: dos fichas lado a lado y confirmar.
 - **Corridas**: últimas corridas por fuente, con vistas, nuevas y errores.
 
+Decisiones de la implementación (fase 5):
+- **Acceso**: todas las páginas piden sesión (`LoginRequiredMiddleware`); se entra con el usuario de Django (`createsuperuser`) desde el login del admin.
+- **"Tiene contacto"** cuenta solo a un CEO, CTO, founder o mail general que no esté rechazado. El autor de HN no cuenta: casi todas las startups de HN lo tienen y el filtro no serviría.
+- **Listado**: sin filtro de estado oculta las descartadas. Los filtros se aplican mientras escribo (HTMX) y quedan en la URL.
+- **Análisis**: el Markdown se renderiza con `markdown` y se limpia con `nh3`, así un `<script>` en el texto no se ejecuta. Marcar como enviado pide la fecha (hoy por defecto) y, opcionalmente, el contacto.
+- **Contactos cargados a mano** quedan confirmados y necesitan un mail o un perfil.
+- **Fusión**: elijo cuál conservar. Se mueven dominios, registros, contactos (sin duplicar), análisis e historial; la conservada mantiene su estado y su inspección, y se recalcula el merge.
+
 ## 10. Plan del MVP
 
 Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revisión antes del PR.
@@ -229,6 +237,6 @@ Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revis
 | 3. Búsquedas abiertas ✅ | `WebsiteInspection`: la home como estrategia principal y las rutas típicas como fallback, respetando robots.txt. Se encola al crear una startup; comando `inspect_websites` para las existentes | Tests con HTML ficticio (link en el nav o el footer, plataforma de búsqueda, frase, "Join us on Discord" que no cuenta, fallback por ruta, redirect a la home que no cuenta, robots.txt, SPA vacía). Corrida real sobre las startups que ya hay, midiendo cuántas tienen señal y revisando una muestra a mano |
 | 3b. Who is hiring ✅ | Adaptador de "Ask HN: Who is hiring?"; señal por aviso reciente; métricas de la home y `inspect_websites --stats` para medir las SPA | Tests con un hilo ficticio. Corrida real sobre el hilo de noviembre de 2026 (§5.4 de la arquitectura) |
 | 4. Contactos ✅ | Se suma a la misma inspección de la fase 3: mailto, LinkedIn, JSON-LD y cargos en `/about`, `/team`, etc., más el autor de HN | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
-| 5. Frontend | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |
+| 5. Frontend ✅ | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |
 
 **MVP terminado** cuando corre una semana solo, descubriendo cada día, y yo hago el ciclo completo con al menos una startup: la reviso, escribo el análisis, tomo el contacto de la ficha, se lo mando desde mi casilla y lo marco como enviado.

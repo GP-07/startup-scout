@@ -1,0 +1,27 @@
+{% load web_tags %}
+<tr id="startup-{{ startup.pk }}" class="{% if startup.status == 'discarded' %}discarded{% endif %}">
+  <td>
+    <a href="{% url 'web:startup_detail' startup.pk %}"><strong>{{ startup.name }}</strong></a>
+    {% if startup.website %}<br><a class="muted" href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website|truncatechars:50 }}</a>{% endif %}
+    {% if startup.description %}<br><span class="muted">{{ startup.description|truncatechars:110 }}</span>{% endif %}
+  </td>
+  <td>
+    {% if startup.has_website_hiring_signal %}<span class="badge badge-hiring">Web</span>{% endif %}
+    {% if startup.has_recent_hiring_post %}<span class="badge badge-hiring">Who is hiring</span>{% endif %}
+  </td>
+  <td>{{ startup.get_status_display }}</td>
+  <td>{{ startup|source_names }}</td>
+  <td>{% if startup.has_key_contact %}✓{% endif %}</td>
+  <td>{{ startup.first_seen_at|date:"d/m/Y" }}</td>
+  <td>
+    {% if startup.status == 'discarded' %}
+      <span class="muted">{{ startup.discard_reason }}</span>
+    {% else %}
+      <form class="discard" hx-post="{% url 'web:startup_discard' startup.pk %}" hx-target="#startup-{{ startup.pk }}" hx-swap="outerHTML">
+        <input name="reason" placeholder="Motivo" required maxlength="255">
+        <button type="submit">Descartar</button>
+        {% if discard_error %}<span class="error">{{ discard_error }}</span>{% endif %}
+      </form>
+    {% endif %}
+  </td>
+</tr>

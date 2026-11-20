@@ -10,7 +10,7 @@ Docs (in Spanish):
 
 ## Stack
 
-Python 3.12 · Django 5.2 · PostgreSQL · huey + Redis · Django templates + HTMX (upcoming).
+Python 3.12 · Django 5.2 · PostgreSQL · huey + Redis · Django templates + HTMX.
 
 ## Sources (MVP)
 
@@ -33,6 +33,12 @@ docker compose up --build
 
 The app listens on http://localhost:8000. Postgres and Redis are exposed on ports 5433 and 6380
 so they don't clash with local services.
+
+Every page needs a session (it is a single-user app). Create your user once and log in with it:
+
+```bash
+docker compose run --rm web python manage.py createsuperuser
+```
 
 Run a source now instead of waiting for the daily 07:00 task:
 
@@ -75,7 +81,7 @@ docker compose run --rm web ruff check .
 - [x] Phase 3 — hiring signal (careers / jobs section on the startup's website)
 - [x] Phase 3b — "Who is hiring?" source, hiring signal from recent posts, single-page-app metrics
 - [x] Phase 4 — contacts from the startup's own website and Hacker News authors
-- [ ] Phase 5 — web UI
+- [x] Phase 5 — web UI: list, detail, contacts, analyses, statuses, manual entry, duplicates, runs
 
 ## License
 

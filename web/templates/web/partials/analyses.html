@@ -1,0 +1,35 @@
+{% load web_tags %}
+{% for item in analyses %}
+  {% with analysis=item.analysis %}
+  <article class="analysis">
+    <header>
+      <h3>{{ analysis.title }}</h3>
+      <p class="muted">
+        Creado el {{ analysis.created_at|date:"d/m/Y" }}
+        {% if analysis.is_sent %}
+          · <strong>Enviado</strong> el {{ analysis.sent_at|date:"d/m/Y" }}{% if analysis.sent_to %} a {{ analysis.sent_to }}{% endif %}
+        {% else %}
+          · Borrador
+        {% endif %}
+      </p>
+    </header>
+    <div class="markdown">{{ analysis.body|markdown }}</div>
+    <footer class="actions">
+      <a href="{% url 'web:analysis_edit' analysis.pk %}">Editar</a>
+      {% if analysis.is_sent %}
+        <button hx-post="{% url 'web:analysis_unmark_sent' analysis.pk %}" hx-target="#analyses">Desmarcar enviado</button>
+      {% else %}
+        <form class="inline-form" hx-post="{% url 'web:analysis_mark_sent' analysis.pk %}" hx-target="#analyses">
+          {{ item.mark_sent_form.sent_on.label }} {{ item.mark_sent_form.sent_on }}
+          {{ item.mark_sent_form.sent_to.label }} {{ item.mark_sent_form.sent_to }}
+          <button type="submit">Marcar como enviado</button>
+        </form>
+      {% endif %}
+      <button class="danger" hx-post="{% url 'web:analysis_delete' analysis.pk %}" hx-target="#analyses"
+              hx-confirm="{% if analysis.is_sent %}Este análisis ya fue enviado. {% endif %}¿Eliminarlo? No se puede deshacer.">Eliminar</button>
+    </footer>
+  </article>
+  {% endwith %}
+{% empty %}
+  <p class="muted">Todavía no hay análisis.</p>
+{% endfor %}

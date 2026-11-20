@@ -15,6 +15,11 @@ class StartupStatus(models.TextChoices):
     DISCARDED = "discarded", "Descartada"
 
 
+# Marking an analysis as sent moves the startup to `contacted`, unless it is already there or later.
+STATUSES_AFTER_CONTACT = (StartupStatus.CONTACTED, StartupStatus.REPLIED)
+ANALYSIS_SENT_NOTE = "Análisis enviado: {title}"
+
+
 class RemotePolicy(models.TextChoices):
     UNKNOWN = "unknown", "Desconocido"
     REMOTE = "remote", "Remoto"
@@ -29,6 +34,14 @@ class ContactRole(models.TextChoices):
     OTHER = "other", "Otro cargo"
     GENERAL = "general", "Contacto general"
 
+
+# Contacts worth writing to: the "has contact" filter of the startup list counts only these.
+KEY_CONTACT_ROLES = (
+    ContactRole.CEO,
+    ContactRole.CTO,
+    ContactRole.FOUNDER,
+    ContactRole.GENERAL,
+)
 
 # When the same person is found twice with different roles, the first of these wins.
 CONTACT_ROLE_STRENGTH = (

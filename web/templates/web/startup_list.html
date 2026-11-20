@@ -1,0 +1,17 @@
+{% extends "web/base.html" %}
+{% block title %}Startups · startup-scout{% endblock %}
+{% block content %}
+<h1>Startups</h1>
+<form class="filters" method="get" action="{% url 'web:startup_list' %}"
+      hx-get="{% url 'web:startup_list' %}" hx-target="#results" hx-push-url="true"
+      hx-trigger="change, input changed delay:400ms, submit">
+  {% for field in filter_form %}
+    <label>{{ field.label }} {{ field }}</label>
+  {% endfor %}
+  <button type="submit">Filtrar</button>
+  <a href="{% url 'web:startup_list' %}">Limpiar</a>
+</form>
+<div id="results">
+  {% include "web/partials/startup_results.html" %}
+</div>
+{% endblock %}
