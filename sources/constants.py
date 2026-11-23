@@ -20,9 +20,10 @@ class SourceRunStatus(models.TextChoices):
 HTTP_TIMEOUT_SECONDS = 20
 HTTP_USER_AGENT = "startup-scout/0.1"
 
-# Daily discovery (Europe/Madrid, the project's TIME_ZONE).
+# Daily discovery: from this hour on (Europe/Madrid, the project's TIME_ZONE), checked every
+# hour at this minute, so a run missed while the computer slept happens at the next check.
 DISCOVERY_HOUR = 7
-DISCOVERY_MINUTE = 0
+DISCOVERY_CHECK_MINUTE = 0
 SOURCE_RUN_LOCK_PREFIX = "source-run"
 
 # Hacker News, through the public Algolia API.

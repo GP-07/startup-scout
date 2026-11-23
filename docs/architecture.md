@@ -163,7 +163,9 @@ Corre una fuente de punta a punta:
 
 ### 2.10 Tareas y comando (`tasks.py`, `run_source`)
 
-- **`run_enabled_sources_task`**: tarea periódica de huey, todos los días a las 7:00 hora de Madrid (`DISCOVERY_HOUR`). Encola una `run_source_task` por cada fuente habilitada con `runs_periodically`, así una fuente que falla no frena a las otras.
+- **`run_enabled_sources_task`**: tarea periódica de huey que corre **cada hora** (`DISCOVERY_CHECK_MINUTE`). Desde las 7:00 hora de Madrid (`DISCOVERY_HOUR`, calculada con el `TIME_ZONE` de Django), encola una `run_source_task` por cada fuente habilitada con `runs_periodically` que todavía no tuvo una corrida exitosa ese día desde esa hora. Así una fuente que falla no frena a las otras, una corrida fallida se reintenta a la hora siguiente y ninguna fuente corre más de una vez por día.
+
+  **Por qué cada hora:** huey dispara una tarea periódica solo si el worker está despierto en ese minuto, y no recupera las perdidas. Con la Mac dormida a las 7:00, el 2026-11-20 no hubo descubrimiento (además, el crontab de huey se evalúa en UTC, así que en realidad estaba a las 8:00). Ahora la corrida del día se hace en el primer chequeo horario con la máquina despierta.
 - **`run_source_task(source_id)`**: corre `SourceRunner` dentro de un lock de huey (`source-run-<key>`), para que dos corridas de la misma fuente no lean el mismo cursor a la vez. Si ya hay una corriendo, la nueva se saltea.
 - **`python manage.py run_source <key>`**: corre una fuente en el momento, fuera del horario. Sirve para probar o para forzar una corrida.
 

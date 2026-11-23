@@ -40,7 +40,8 @@ Every page needs a session (it is a single-user app). Create your user once and 
 docker compose run --rm web python manage.py createsuperuser
 ```
 
-Run a source now instead of waiting for the daily 07:00 task:
+Sources run once a day from 07:00 (Madrid time). The worker checks every hour, so a run missed
+while the computer was asleep happens at the next check. To run a source right now:
 
 ```bash
 docker compose run --rm web python manage.py run_source hacker_news
