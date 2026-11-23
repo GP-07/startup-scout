@@ -3,7 +3,7 @@ import nh3
 from django import template
 from django.utils.safestring import mark_safe
 
-from web.constants import HTMX_SCRIPT_URL, MARKDOWN_EXTENSIONS
+from web.constants import HTMX_SCRIPT_URL, MARKDOWN_EXTENSIONS, OPENINGS_PER_ROW
 
 register = template.Library()
 
@@ -20,6 +20,12 @@ def source_names(startup):
     """Names of the sources that reported the startup, once each (records are prefetched)."""
     names = {record.source.name for record in startup.source_records.all()}
     return ", ".join(sorted(names))
+
+
+@register.filter
+def first_openings(startup):
+    """The first active openings of a listed startup (prefetched as `openings`)."""
+    return startup.openings[:OPENINGS_PER_ROW]
 
 
 @register.simple_tag

@@ -27,3 +27,7 @@ class ForeignContactError(ValueError):
 
     def __init__(self, contact, startup):
         super().__init__(f"Contact {contact.pk} does not belong to startup {startup.pk}")
+
+
+class JobBoardError(Exception):
+    """A job board API could not be read: the board does not exist or the API failed."""

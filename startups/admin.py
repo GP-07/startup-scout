@@ -1,15 +1,11 @@
 from django.contrib import admin
 from django.db import models
 
-from startups.constants import (
-    HIRING_FILTER_NO,
-    HIRING_FILTER_PARAMETER,
-    HIRING_FILTER_YES,
-    HiringSignalOrigin,
-)
+from startups.constants import OpeningsStatus
 from startups.models import (
     Analysis,
     Contact,
+    JobOpening,
     Startup,
     StartupDomain,
     StatusChange,
@@ -28,25 +24,16 @@ class ContactInline(admin.TabularInline):
     fields = ["full_name", "role", "email", "profile_url", "found_via", "evidence_url", "status"]
 
 
+class JobOpeningInline(admin.TabularInline):
+    model = JobOpening
+    extra = 0
+    fields = ["title", "location", "is_remote", "published_at", "origin", "url"]
+
+
 class WebsiteInspectionInline(admin.StackedInline):
     model = WebsiteInspection
     extra = 0
     can_delete = False
-
-
-class HiringSignalFilter(admin.SimpleListFilter):
-    title = "búsquedas abiertas"
-    parameter_name = HIRING_FILTER_PARAMETER
-
-    def lookups(self, request, model_admin):
-        return [(HIRING_FILTER_YES, "Sí"), (HIRING_FILTER_NO, "No")]
-
-    def queryset(self, request, queryset):
-        if self.value() == HIRING_FILTER_YES:
-            return queryset.filter(has_hiring_signal=True)
-        if self.value() == HIRING_FILTER_NO:
-            return queryset.filter(has_hiring_signal=False)
-        return queryset
 
 
 @admin.register(Startup)
@@ -54,37 +41,40 @@ class StartupAdmin(admin.ModelAdmin):
     list_display = [
         "name",
         "website",
-        "has_hiring_signal",
-        "hiring_signal_origin",
+        "openings_state",
+        "openings_count",
         "status",
         "first_seen_at",
     ]
-    list_filter = [HiringSignalFilter, "status", "country"]
+    list_filter = ["website_inspection__openings_status", "status", "country"]
     search_fields = ["name", "website", "domains__domain"]
     raw_id_fields = ["possible_duplicate_of"]
-    inlines = [StartupDomainInline, ContactInline, WebsiteInspectionInline]
+    inlines = [StartupDomainInline, JobOpeningInline, ContactInline, WebsiteInspectionInline]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).with_hiring_signal()
+        return super().get_queryset(request).with_openings()
 
     def get_ordering(self, request):
-        # Startups with a hiring signal first, then the newest. Set here and not in `ordering`
+        # Startups with active openings first, then the newest. Set here and not in `ordering`
         # because it sorts by an annotation, which the admin checks would reject there.
-        return [models.F("has_hiring_signal").desc(), "-first_seen_at"]
+        return [models.F("openings_count").desc(), "-first_seen_at"]
 
-    @admin.display(boolean=True, description="Búsquedas abiertas", ordering="has_hiring_signal")
-    def has_hiring_signal(self, startup):
-        return startup.has_hiring_signal
+    @admin.display(description="Búsquedas", ordering="openings_state")
+    def openings_state(self, startup):
+        return OpeningsStatus(startup.openings_state).label
 
-    @admin.display(description="Señal desde")
-    def hiring_signal_origin(self, startup):
-        if startup.has_website_hiring_signal and startup.has_recent_hiring_post:
-            return HiringSignalOrigin.BOTH.label
-        if startup.has_website_hiring_signal:
-            return HiringSignalOrigin.WEBSITE.label
-        if startup.has_recent_hiring_post:
-            return HiringSignalOrigin.HIRING_POST.label
-        return ""
+    @admin.display(description="Activas", ordering="openings_count")
+    def openings_count(self, startup):
+        return startup.openings_count
+
+
+@admin.register(JobOpening)
+class JobOpeningAdmin(admin.ModelAdmin):
+    list_display = ["title", "startup", "location", "is_remote", "published_at", "origin"]
+    list_filter = ["origin", "is_remote"]
+    search_fields = ["title", "startup__name", "location"]
+    raw_id_fields = ["startup"]
+    list_select_related = ["startup"]
 
 
 @admin.register(Contact)
@@ -117,9 +107,16 @@ class WebsiteInspectionAdmin(admin.ModelAdmin):
         "hiring_signal_method",
         "hiring_signal_kind",
         "hiring_signal_url",
+        "openings_status",
         "contacts_found",
         "inspected_at",
     ]
-    list_filter = ["status", "has_hiring_signal", "hiring_signal_method", "hiring_signal_kind"]
+    list_filter = [
+        "status",
+        "has_hiring_signal",
+        "openings_status",
+        "hiring_signal_method",
+        "hiring_signal_kind",
+    ]
     search_fields = ["startup__name", "hiring_signal_url"]
     raw_id_fields = ["startup"]

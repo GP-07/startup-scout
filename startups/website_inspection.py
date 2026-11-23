@@ -8,7 +8,6 @@ those pages when it links none. robots.txt is respected throughout.
 
 import logging
 from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
 
 import httpx
 from bs4 import BeautifulSoup
@@ -21,14 +20,10 @@ from startups.constants import (
     HIRING_FALLBACK_PATHS,
     HIRING_SIGNAL_TEXT_MAX_LENGTH,
     HOME_PATHS,
-    HTML_CONTENT_TYPE,
     HTTP_NOT_FOUND,
     HTTP_OK,
-    HTTP_SERVER_ERROR_MIN,
     INSPECTION_TIMEOUT_SECONDS,
     INSPECTION_USER_AGENT,
-    ROBOTS_DISALLOW_ALL_STATUS_CODES,
-    ROBOTS_TXT_PATH,
     ROBOTS_USER_AGENT_TOKEN,
     URL_SCHEME_PATTERN,
     ContactFoundVia,
@@ -47,7 +42,9 @@ from startups.hiring_signal import (
     visible_text,
 )
 from startups.models import WebsiteInspection
+from startups.openings import OpeningsVerifier
 from startups.page_metrics import measure_page
+from startups.web_pages import html_of, load_robots, site_root
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +63,9 @@ def mark_inspection_pending(startup):
 
 
 class WebsiteInspectionService:
-    def __init__(self, http_client=None):
+    def __init__(self, http_client=None, openings_verifier=None):
         self._http_client = http_client
+        self._openings_verifier = openings_verifier
 
     @property
     def http_client(self):
@@ -79,15 +77,34 @@ class WebsiteInspectionService:
             )
         return self._http_client
 
+    @property
+    def openings_verifier(self):
+        if self._openings_verifier is None:
+            self._openings_verifier = OpeningsVerifier(http_client=self.http_client)
+        return self._openings_verifier
+
     def inspect(self, startup):
-        """Inspect the startup's website and store the result. None if it has no own domain."""
+        """Inspect the startup's website, then check its openings (`OpeningsVerifier`).
+
+        Returns the stored inspection, or None if the startup has no own domain.
+        """
         domain = primary_domain(startup)
         if domain is None:
             return None
+        known_robots = {}
+        inspection = self._inspect_website(startup, domain, known_robots)
+        # Also after a blocked or failed visit: a job board linked from a job post needs no
+        # visit to the website.
+        self.openings_verifier.verify(startup, known_robots=known_robots)
+        inspection.refresh_from_db()
+        return inspection
+
+    def _inspect_website(self, startup, domain, known_robots):
         inspection, _ = WebsiteInspection.objects.get_or_create(startup=startup)
         home_url = f"https://{domain}/"
         try:
-            robots = self._load_robots(home_url)
+            robots = load_robots(self.http_client, home_url)
+            known_robots[site_root(home_url)] = robots
             if not robots.can_fetch(ROBOTS_USER_AGENT_TOKEN, home_url):
                 return self._save(inspection, InspectionStatus.BLOCKED)
             home_response = self.http_client.get(home_url)
@@ -99,7 +116,7 @@ class WebsiteInspectionService:
             logger.info("Could not inspect %s: %s", home_url, error)
             return self._save(inspection, InspectionStatus.FAILED, error=str(error))
 
-        home_html = _html_of(home_response)
+        home_html = html_of(home_response)
         signal = detect_hiring_signal(home_html, str(home_response.url))
         method = HiringSignalMethod.HOME if signal else ""
         if signal is None:
@@ -128,27 +145,11 @@ class WebsiteInspectionService:
             return None
         return self.http_client.get(website_url)
 
-    def _load_robots(self, home_url):
-        """Parsed robots.txt. Missing file allows all; 401/403 and server errors disallow all."""
-        robots = RobotFileParser()
-        robots_url = _site_root(home_url) + ROBOTS_TXT_PATH
-        response = self.http_client.get(robots_url)
-        if response.status_code == HTTP_OK:
-            robots.parse(response.text.splitlines())
-        elif (
-            response.status_code in ROBOTS_DISALLOW_ALL_STATUS_CODES
-            or response.status_code >= HTTP_SERVER_ERROR_MIN
-        ):
-            robots.disallow_all = True
-        else:
-            robots.allow_all = True
-        return robots
-
     def _probe_typical_paths(self, home_response, home_html, robots):
-        site_root = _site_root(str(home_response.url))
+        root_url = site_root(str(home_response.url))
         home_text = visible_text(home_html)
         for path in HIRING_FALLBACK_PATHS:
-            probe_url = site_root + path
+            probe_url = root_url + path
             if not robots.can_fetch(ROBOTS_USER_AGENT_TOKEN, probe_url):
                 continue
             try:
@@ -156,7 +157,7 @@ class WebsiteInspectionService:
             except httpx.HTTPError as error:
                 logger.info("Could not probe %s: %s", probe_url, error)
                 continue
-            if _is_hiring_page(response, site_root, home_text):
+            if _is_hiring_page(response, root_url, home_text):
                 return HiringSignal(
                     kind=HiringSignalKind.LINK_PATH,
                     url=str(response.url),
@@ -167,11 +168,11 @@ class WebsiteInspectionService:
     def _collect_contacts(self, startup, home_response, home_html, robots):
         """Find contacts on the home and on its contact pages; return how many were found."""
         home_url = str(home_response.url)
-        site_root = _site_root(home_url)
+        root_url = site_root(home_url)
         home_text = visible_text(home_html)
         candidates = list(extract_contacts(home_html, home_url))
         page_urls = contact_page_links(home_html, home_url) or [
-            site_root + path for path in CONTACT_FALLBACK_PATHS
+            root_url + path for path in CONTACT_FALLBACK_PATHS
         ]
         for page_url in page_urls[:CONTACT_MAX_EXTRA_PAGES]:
             if not robots.can_fetch(ROBOTS_USER_AGENT_TOKEN, page_url):
@@ -181,8 +182,8 @@ class WebsiteInspectionService:
             except httpx.HTTPError as error:
                 logger.info("Could not read %s: %s", page_url, error)
                 continue
-            if _is_own_page(response, site_root, home_text):
-                candidates.extend(extract_contacts(_html_of(response), str(response.url)))
+            if _is_own_page(response, root_url, home_text):
+                candidates.extend(extract_contacts(html_of(response), str(response.url)))
         contacts = merge_contacts(candidates)
         save_contacts(startup, contacts, ContactFoundVia.WEBSITE)
         return len(contacts)
@@ -215,26 +216,21 @@ class WebsiteInspectionService:
         return inspection
 
 
-def _is_hiring_page(response, site_root, home_text):
+def _is_hiring_page(response, root_url, home_text):
     """A probed path counts only if it is a real page of its own with hiring words."""
-    return _is_own_page(response, site_root, home_text) and has_hiring_keywords(_html_of(response))
+    return _is_own_page(response, root_url, home_text) and has_hiring_keywords(html_of(response))
 
 
-def _is_own_page(response, site_root, home_text):
+def _is_own_page(response, root_url, home_text):
     """A page of the site other than the home, not a redirect to it nor the same SPA shell."""
     if response.status_code != HTTP_OK:
         return False
     final_url = urlsplit(str(response.url))
-    if _site_root(str(response.url)) != site_root or final_url.path in HOME_PATHS:
+    if site_root(str(response.url)) != root_url or final_url.path in HOME_PATHS:
         return False  # Redirected to the home page or to another site.
-    page_html = _html_of(response)
+    page_html = html_of(response)
     # Single-page apps serve the same shell for every path.
     return bool(page_html) and visible_text(page_html) != home_text
-
-
-def _html_of(response):
-    content_type = response.headers.get("Content-Type", "")
-    return response.text if HTML_CONTENT_TYPE in content_type else ""
 
 
 def _page_title(response):
@@ -247,8 +243,3 @@ def _page_title(response):
 def _absolute_url(website):
     value = (website or "").strip()
     return value if URL_SCHEME_PATTERN.match(value) else f"{DEFAULT_URL_SCHEME}{value}"
-
-
-def _site_root(url):
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{parts.netloc}"

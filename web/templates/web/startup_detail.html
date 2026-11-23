@@ -7,8 +7,8 @@
   {% if startup.website %}<a href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website }}</a> · {% endif %}
   <strong>{{ startup.get_status_display }}</strong>
   {% if startup.discard_reason %}<span class="muted">({{ startup.discard_reason }})</span>{% endif %}
-  {% if startup.has_hiring_signal %}
-    · <span class="badge badge-hiring">Búsquedas abiertas{% if startup.has_website_hiring_signal %} · web{% endif %}{% if startup.has_recent_hiring_post %} · Who is hiring{% endif %}</span>
+  {% if startup.openings_state == 'active' %}
+    · <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }} activa{{ startup.openings_count|pluralize }}</span>
   {% endif %}
 </p>
 
@@ -56,7 +56,31 @@
 </div>
 
 <section>
-  <h2>Búsquedas abiertas</h2>
+  <h2>Búsquedas</h2>
+  {% if inspection and inspection.openings_status != 'not_checked' %}
+    <p>
+      <strong>{{ inspection.get_openings_status_display }}</strong>
+      {% if inspection.openings_checked_at %}· verificado el {{ inspection.openings_checked_at|date:"d/m/Y" }}{% endif %}
+      {% if inspection.openings_url %}· <a href="{{ inspection.openings_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.openings_url|truncatechars:60 }}</a>{% endif %}
+    </p>
+  {% endif %}
+  {% if openings %}
+    <table>
+      <thead><tr><th>Puesto</th><th>Ubicación</th><th>Remoto</th><th>Publicado</th><th>Origen</th></tr></thead>
+      <tbody>
+      {% for opening in openings %}
+        <tr>
+          <td>{% if opening.url %}<a href="{{ opening.url }}" target="_blank" rel="noopener noreferrer">{{ opening.title }}</a>{% else %}{{ opening.title }}{% endif %}</td>
+          <td>{{ opening.location|default:"—" }}</td>
+          <td>{% if opening.is_remote %}Sí{% elif opening.is_remote is False %}No{% else %}—{% endif %}</td>
+          <td>{{ opening.published_at|date:"d/m/Y"|default:"sin fecha" }}</td>
+          <td>{{ opening.get_origin_display }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+  <h3>Señal en la web</h3>
   {% if inspection %}
     <p>
       Web: {{ inspection.get_status_display }}{% if inspection.inspected_at %} el {{ inspection.inspected_at|date:"d/m/Y" }}{% endif %}.

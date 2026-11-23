@@ -1,48 +1,70 @@
-from datetime import timedelta
-
 from django.db import models
-from django.db.models import Case, Exists, OuterRef, Q, When
-from django.utils import timezone
+from django.db.models import Case, Count, Exists, F, Max, OuterRef, Subquery, Value, When
+from django.db.models.functions import Coalesce
 
-from sources.constants import SourceKey
-from sources.models import SourceRecord
-from startups.constants import HIRING_POST_MAX_AGE_DAYS, KEY_CONTACT_ROLES, ContactStatus
+from startups.constants import (
+    KEY_CONTACT_ROLES,
+    PERSON_CONTACT_ROLES,
+    ContactRole,
+    ContactStatus,
+    OpeningsStatus,
+)
 
 
 class StartupQuerySet(models.QuerySet):
-    def with_hiring_signal(self):
-        """Annotate whether the startup is hiring, and where that comes from.
+    def with_openings(self):
+        """Annotate what the startup publishes today (see `JobOpening`).
 
-        - `has_website_hiring_signal`: its website inspection found open positions.
-        - `has_recent_hiring_post`: it posted in "Who is hiring?" within HIRING_POST_MAX_AGE_DAYS.
-          An old post says nothing about today.
-        - `has_hiring_signal`: either of them.
+        - `openings_state`: the `OpeningsStatus` of its last verification (`not_checked` if none).
+        - `openings_count`: how many active openings it has.
+        - `latest_opening_at`: when its newest dated opening was published.
+        - `has_remote_opening`: at least one active opening is remote.
         """
-        oldest_post_date = timezone.now() - timedelta(days=HIRING_POST_MAX_AGE_DAYS)
-        recent_hiring_posts = SourceRecord.objects.filter(
-            startup=OuterRef("pk"),
-            source__key=SourceKey.HACKER_NEWS_HIRING,
-            published_at__gte=oldest_post_date,
+        openings = self._related_model("job_openings").objects.filter(startup=OuterRef("pk"))
+        opening_totals = openings.order_by().values("startup")
+        return self.annotate(
+            openings_state=Coalesce(
+                F("website_inspection__openings_status"), Value(OpeningsStatus.NOT_CHECKED)
+            ),
+            openings_count=Coalesce(
+                Subquery(opening_totals.annotate(total=Count("id")).values("total")), 0
+            ),
+            latest_opening_at=Subquery(
+                opening_totals.annotate(latest=Max("published_at")).values("latest")
+            ),
+            has_remote_opening=Exists(openings.filter(is_remote=True)),
+        )
+
+    def with_contact_kinds(self):
+        """Annotate `has_person_contact` (CEO, CTO, founder) and `has_general_contact`.
+
+        Rejected contacts do not count, nor does the author of a Hacker News post (role
+        "other"): nearly every startup from HN has one.
+        """
+        contacts = (
+            self._related_model("contacts")
+            .objects.filter(startup=OuterRef("pk"))
+            .exclude(status=ContactStatus.REJECTED)
         )
         return self.annotate(
-            has_website_hiring_signal=_true_when(Q(website_inspection__has_hiring_signal=True)),
-            has_recent_hiring_post=Exists(recent_hiring_posts),
-        ).annotate(
-            has_hiring_signal=_true_when(
-                Q(has_website_hiring_signal=True) | Q(has_recent_hiring_post=True)
-            ),
+            has_person_contact=Exists(contacts.filter(role__in=PERSON_CONTACT_ROLES)),
+            has_general_contact=Exists(contacts.filter(role=ContactRole.GENERAL)),
+            has_key_contact=Exists(contacts.filter(role__in=KEY_CONTACT_ROLES)),
         )
 
-    def with_key_contact(self):
-        """Annotate `has_key_contact`: a CEO, CTO, founder or general mailbox not rejected."""
+    def with_analysis_state(self):
+        """Annotate `has_analysis` and `has_sent_analysis`."""
+        analyses = self._related_model("analyses").objects.filter(startup=OuterRef("pk"))
+        return self.annotate(
+            has_analysis=Exists(analyses),
+            has_sent_analysis=Exists(analyses.filter(sent_at__isnull=False)),
+        )
+
+    def _related_model(self, relation_name):
         # Resolved through the relation: startups.models imports this module.
-        contact_model = self.model._meta.get_field("contacts").related_model
-        key_contacts = contact_model.objects.filter(
-            startup=OuterRef("pk"), role__in=KEY_CONTACT_ROLES
-        ).exclude(status=ContactStatus.REJECTED)
-        return self.annotate(has_key_contact=Exists(key_contacts))
+        return self.model._meta.get_field(relation_name).related_model
 
 
-def _true_when(condition):
+def true_when(condition):
     """A strict boolean (never null, even without a related row) for `condition`."""
     return Case(When(condition, then=True), default=False, output_field=models.BooleanField())

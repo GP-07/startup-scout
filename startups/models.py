@@ -7,6 +7,8 @@ from startups.constants import (
     HiringSignalKind,
     HiringSignalMethod,
     InspectionStatus,
+    OpeningOrigin,
+    OpeningsStatus,
     RemotePolicy,
     StartupStatus,
 )
@@ -141,7 +143,39 @@ class WebsiteInspection(models.Model):
     home_has_app_root = models.BooleanField(null=True, blank=True)
     # Contacts found on the website in the last inspection (stored in `Contact`).
     contacts_found = models.PositiveIntegerField(default=0)
+    # Whether its openings are published today, on its website or its job board (`JobOpening`).
+    openings_status = models.CharField(
+        max_length=20,
+        choices=OpeningsStatus.choices,
+        default=OpeningsStatus.NOT_CHECKED,
+        db_index=True,
+    )
+    openings_checked_at = models.DateTimeField(null=True, blank=True)
+    openings_url = models.URLField(max_length=500, blank=True)
     error = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.startup}: {self.status}"
+
+
+class JobOpening(models.Model):
+    """An opening published today on the startup's website or job board.
+
+    Each verification replaces the startup's openings: one no longer published disappears.
+    Only active ones are kept: those with a date are at most OPENINGS_MAX_AGE_DAYS old.
+    """
+
+    startup = models.ForeignKey(Startup, on_delete=models.CASCADE, related_name="job_openings")
+    title = models.CharField(max_length=255)
+    location = models.CharField(max_length=255, blank=True)
+    is_remote = models.BooleanField(null=True, blank=True)
+    url = models.URLField(max_length=500, blank=True)
+    # When the website or the job board published it. Null if they do not say.
+    published_at = models.DateTimeField(null=True, blank=True)
+    origin = models.CharField(max_length=20, choices=OpeningOrigin.choices)
+
+    class Meta:
+        ordering = [models.F("published_at").desc(nulls_last=True), "title"]
+
+    def __str__(self):
+        return f"{self.startup}: {self.title}"

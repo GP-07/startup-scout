@@ -45,6 +45,10 @@ startup-scout/
 │   ├── hiring_signal.py    Detección de búsquedas abiertas en un HTML (funciones puras)
 │   ├── contact_extraction.py  Contactos en un HTML: mailto, LinkedIn, JSON-LD, cargos (funciones puras)
 │   ├── contacts.py         save_contacts: guarda candidatos sin duplicar ni pisar lo revisado
+│   ├── job_listing.py      Puestos de una página de careers y tableros (funciones puras)
+│   ├── job_boards.py       APIs públicas de Ashby, Greenhouse y Lever
+│   ├── openings.py         OpeningsVerifier: búsquedas activas de una startup
+│   ├── web_pages.py        robots.txt y lectura de páginas, compartidos
 │   ├── status.py           change_status / discard_startup: estados con historial
 │   ├── analyses.py         Marcar y desmarcar un análisis como enviado
 │   ├── duplicates.py       merge_startups / dismiss_duplicate
@@ -259,12 +263,19 @@ El resultado de visitar la web propia de una startup. Hay uno por startup (`OneT
 - **`python manage.py inspect_websites`**: inspecciona, de a una, las startups con dominio propio que nunca se inspeccionaron (o que quedaron `pending` o `failed`). Con `--all` las inspecciona todas de nuevo; `--limit N` acota la cantidad. Al terminar imprime un resumen. Con `--stats` no inspecciona nada: lista las probables SPA vacías (§3.12).
 - **`prune_platform_domains`** también promueve a principal el dominio que quedó como alias cuando el principal era una plataforma. Pasa cuando el link de la fuente redirige a una plataforma, como `go.gene.com` → Workday.
 
-### 3.12 Señal combinada y medición de SPA: `querysets.py`, `page_metrics.py`, `inspection_stats.py`
+### 3.12 Anotaciones y medición de SPA: `querysets.py`, `page_metrics.py`, `inspection_stats.py`
 
-- **`Startup.objects.with_hiring_signal()`** anota tres booleanos, nunca nulos: `has_website_hiring_signal` (la inspección la encontró), `has_recent_hiring_post` (tiene un registro de `hacker_news_hiring` publicado en los últimos `HIRING_POST_MAX_AGE_DAYS`, 60) y `has_hiring_signal` (cualquiera de los dos). No hay un flag guardado que se desactualice: se calcula en cada consulta con un `Exists`.
-- **Admin**: el listado de startups usa esa anotación para ordenar (con señal primero, después las más nuevas), para la columna "Señal desde" (Web, Who is hiring o las dos) y para el filtro "búsquedas abiertas". El orden se define en `get_ordering`, porque los checks del admin no aceptan una anotación en `ordering`.
+- **`Startup.objects.with_openings()`**: `openings_state` (el `OpeningsStatus` de la última verificación, `not_checked` si no hubo), `openings_count`, `latest_opening_at` (la fecha de la búsqueda más nueva con fecha) y `has_remote_opening`. **`with_contact_kinds()`**: `has_person_contact` (CEO, CTO o founder no rechazado), `has_general_contact` y `has_key_contact`. **`with_analysis_state()`**: `has_analysis` y `has_sent_analysis`. Todo se calcula en cada consulta con subconsultas: no hay flags guardados que se desactualicen.
+- **Admin**: el listado de startups ordena por cantidad de búsquedas activas y filtra por estado de búsquedas. El orden se define en `get_ordering`, porque los checks del admin no aceptan una anotación en `ordering`. `JobOpening` tiene su propia lista y aparece dentro de cada startup.
 - **`page_metrics.py`**: `measure_page(html)` mide la home y `is_probable_spa_shell(metrics)` aplica la regla: menos de `SPA_SHELL_MAX_TEXT_LENGTH` (200) caracteres visibles, o un contenedor de framework (`APP_ROOT_ELEMENT_IDS`) con menos de `SPA_SHELL_MIN_LINK_COUNT` (3) links. Son umbrales para revisar a mano, no una certeza.
 - **`inspection_stats.spa_shell_stats()`**: entre las inspecciones `done` sin señal, cuenta las que todavía no tienen métricas (inspeccionadas antes de que existieran) y devuelve las probables SPA vacías.
+
+### 3.15 Búsquedas activas: `job_listing.py`, `job_boards.py` y `openings.py`
+
+- **`job_listing.py`** (funciones puras): `find_job_board(texto)` encuentra el primer tablero de Ashby, Greenhouse o Lever en un HTML o una URL (`jobs.ashbyhq.com/{org}`, `job-boards.greenhouse.io/{token}` o su embed `?for={token}`, `jobs.lever.co/{site}`). `extract_openings(html, url)` lee los puestos de una página de careers: links a páginas de puestos del mismo sitio (debajo de la página, o `/jobs/<slug>`, `/careers/<slug>`…) o de un tablero, cuyo texto nombra un puesto (Engineer, Designer, Manager…), y los `JobPosting` de schema.org con su `datePosted`. En YC o Wellfound solo cuentan los links debajo de la página de la empresa: el resto es el directorio de la plataforma. Descarta las postulaciones genéricas. `says_no_openings` reconoce "No open positions" y similares; `open_positions_links` encuentra los "See open positions".
+- **`job_boards.py`**: `JobBoardClient.fetch_openings(board)` lee las APIs públicas oficiales (Ashby `publishedAt`, Greenhouse `first_published`, Lever `createdAt`, con reintento en el host EU de Lever). Si el tablero no existe o la API falla, lanza `JobBoardError` y la verificación sigue con la página.
+- **`openings.py`**: `OpeningsVerifier.verify(startup)` elige dónde mirar (la URL de la señal si es una página de careers de la startup, después los tableros linkeados desde sus avisos de Who is hiring), aplica el orden tablero → página → link "open positions", filtra las búsquedas con fecha de más de `OPENINGS_MAX_AGE_DAYS` (60), **reemplaza** los `JobOpening` y guarda `openings_status`, `openings_url` y `openings_checked_at`. Una señal sin página propia que leer (un `jobs@`, un mail ofuscado de Cloudflare, otro sitio) queda `unverified`; sin señal ni avisos, `not_checked`. Respeta robots.txt y reutiliza el de la inspección.
+- **Cuándo corre**: al final de cada inspección de la web (también si la web bloqueó o falló, porque un tablero de un aviso no necesita la web); `recheck_openings_task` cada hora re-verifica de a `OPENINGS_RECHECK_BATCH` (50) las que tienen más de `OPENINGS_RECHECK_DAYS` (7) días; y `python manage.py verify_openings` (con `--all` y `--limit`) para las ya cargadas.
 
 ### 3.13 Contactos: `contact_extraction.py` y `contacts.py`
 
@@ -298,7 +309,8 @@ El resultado de visitar la web propia de una startup. Hay uno por startup (`OneT
 | `HIRING_*`, `JOB_BOARD_DOMAINS`, `JOB_SECTION_DOMAINS` | `startups/constants.py` | Qué cuenta como señal de búsqueda: paths, textos, frases, mails y plataformas |
 | `HIRING_FALLBACK_PATHS` | `startups/constants.py` | Rutas del fallback, en orden: `/careers`, `/jobs`, `/join-us`, `/trabaja-con-nosotros` |
 | `INSPECTION_TIMEOUT_SECONDS`, `INSPECTION_USER_AGENT` | `startups/constants.py` | Timeout (10 s) y User-Agent identificable (`startup-scout/0.1`) de la inspección |
-| `HIRING_POST_MAX_AGE_DAYS` | `startups/constants.py` | Cuánto dura la señal de un aviso en "Who is hiring?" (60 días) |
+| `OPENINGS_MAX_AGE_DAYS`, `OPENINGS_RECHECK_*` | `startups/constants.py` | Antigüedad máxima de una búsqueda con fecha (60 días) y re-verificación semanal (de a 50 por hora) |
+| `JOB_BOARD_PATTERNS`, `*_API_URL`, `GENERIC_APPLICATION_PHRASES`, `NO_OPENINGS_PHRASES`, `JOB_TITLE_WORDS` | `startups/constants.py` | Tableros reconocidos, sus APIs y las reglas para leer una página de careers |
 | `SPA_SHELL_*`, `APP_ROOT_ELEMENT_IDS` | `startups/constants.py` | Regla de "probable SPA vacía" |
 | `CONTACT_*`, `GENERAL_EMAIL_LOCAL_PARTS`, `ROLE_TITLE_PHRASES`, `PERSON_NAME_*` | `startups/constants.py` | Páginas de contacto, buzones genéricos, cargos y qué parece un nombre |
 | `HACKER_NEWS_HIRING_*`, `FREE_EMAIL_DOMAINS` | `sources/constants.py` | Hilos de "Who is hiring?", ventana de relectura y proveedores de correo que no sirven como web |
@@ -432,6 +444,8 @@ De las 14 señales finales, 11 son búsquedas reales: links a `/careers`, a la p
 
 **Sobre las startups de "Who is hiring?"**, que sabemos que están contratando, la inspección de la web encontró la señal en **106 de 151** inspeccionadas (~70 %). Es una medida de cuánto detecta la inspección cuando la búsqueda existe. Con las dos fuentes, el admin muestra **168 startups con señal** de 527, contra 14 antes.
 
+**Búsquedas activas (2026-11-23)**: `verify_openings --all` sobre las 184 startups con señal en la web o aviso en Who is hiring tardó ~1 minuto. Resultado: **63 con búsquedas activas** (538 puestos: 223 de Ashby, 108 de Greenhouse, 5 de Lever y el resto de páginas propias; 226 remotos), 7 sin búsquedas activas, 65 sin verificar y 49 sin nada que verificar (avisos de Who is hiring sin señal en la web ni tablero linkeado). Revisando una muestra de los puestos leídos de páginas propias, casi todos son reales. Se corrigieron dos fuentes de falsos positivos (el directorio de Wellfound y la bolsa de trabajo de itch.io, a las que apuntaban dos señales) y se sumaron el redirect con tablero, el link "See open positions" y los mails ofuscados de Cloudflare. Sigue habiendo un límite conocido: una startup cuyo producto es una bolsa de trabajo lista puestos de otras empresas.
+
 **Contactos (fase 4, 2026-11-19)**: `inspect_websites --all` sobre 413 startups con dominio propio tardó ~17 minutos (antes ~1 s por sitio, ahora ~2,5 s, por las páginas de contacto; las visitas son en serie). Resultado, después de corregir los testimonios:
 
 | | Cantidad |
@@ -473,8 +487,8 @@ Django templates con HTMX (cargado desde unpkg, versión fija). Todas las págin
 
 | Página | URL | Qué hace |
 |---|---|---|
-| Listado | `/` | Primero las que tienen búsquedas abiertas, después las más nuevas, de a 50. Filtros por texto (nombre, web, descripción, dominio), estado (sin filtro oculta las descartadas), fuente, país, búsquedas abiertas, "tiene contacto" (CEO, CTO, founder o mail general no rechazado) y fecha. HTMX reemplaza solo los resultados y deja los filtros en la URL. Descarte rápido con motivo en cada fila |
-| Ficha | `/startups/<id>/` | Estado con historial y cambio de estado; datos con la fuente de cada campo; dominios; evidencia de búsquedas abiertas (web y avisos); contactos (confirmar, descartar, cargar a mano); análisis; registros de cada fuente |
+| Listado | `/` | **Por defecto solo startups con búsquedas activas**, la búsqueda más reciente primero, de a 50, con la cantidad de búsquedas y los primeros puestos en cada fila. Filtros: búsquedas (activas, sin verificar, sin búsquedas activas, sin señal, todas), puesto contiene, con puesto remoto, texto (nombre, web, descripción, dominio), estado (sin filtro oculta las descartadas), fuente, país, contacto (CEO/CTO/founder, solo mail general, sin contacto), análisis (sin análisis, borradores, enviado), fecha y orden (búsqueda más reciente, vistas más recientemente, más búsquedas). HTMX reemplaza solo los resultados y deja los filtros en la URL. Descarte rápido con motivo en cada fila |
+| Ficha | `/startups/<id>/` | Estado con historial y cambio de estado; datos con la fuente de cada campo; dominios; búsquedas activas (puesto, ubicación, remoto, fecha y origen, con link) y cuándo y dónde se verificaron; señal en la web y avisos; contactos (confirmar, descartar, cargar a mano); análisis; registros de cada fuente |
 | Análisis | `/startups/<id>/analyses/new/`, `/analyses/<id>/edit/` | Formulario con título y Markdown. En la ficha: marcar como enviado (fecha y contacto), desmarcar y eliminar con confirmación (avisa si ya estaba enviado). Al marcar como enviado la página se recarga, porque cambia el estado |
 | Alta manual | `/startups/new/` | Pegar una URL. Si ya existía, lleva a su ficha |
 | Duplicados | `/duplicates/`, `/duplicates/<id>/` | Lista de posibles duplicados, comparación lado a lado, fusionar eligiendo cuál conservar o marcar que son distintas |
@@ -508,10 +522,14 @@ Cada app tiene sus tests en `<app>/tests/`, con sus propios fakes:
 | `startups/tests/test_analyses.py` | Marcar como enviado (fecha, contacto, paso a `contacted`), fecha por defecto, startup que ya respondió, contacto de otra startup, desmarcar |
 | `startups/tests/test_duplicates.py` | Fusión completa y recálculo, contactos sin duplicar, inspección y posibles duplicados reapuntados, fusionar consigo misma, descartar la marca |
 | `sources/tests/test_manual_entry.py` | Alta nueva con inspección encolada, web ya conocida, URL inválida |
-| `web/tests/test_startup_list.py` | Login obligatorio, orden, descartadas ocultas, cada filtro, respuesta parcial de HTMX, descarte rápido, fuentes en cada fila |
+| `web/tests/test_startup_list.py` | Login obligatorio, lista limpia por defecto y su orden, filtro de búsquedas, puesto y remoto, contacto, análisis, descartadas, texto, fuente, país, fecha, puestos en cada fila, respuesta parcial de HTMX, descarte rápido |
 | `web/tests/test_startup_detail.py` | Ficha con procedencia y contactos, cambio de estado, descarte sin motivo, contactos (confirmar y cargar a mano), ciclo completo de un análisis, Markdown sin HTML crudo |
 | `web/tests/test_other_pages.py` | Alta manual (nueva e inválida), duplicados (listar, comparar, fusionar, descartar), corridas |
-| `startups/tests/test_hiring_status.py` | Señal por aviso reciente, aviso viejo, aviso de otra fuente, señal de la web, las dos; filtro y orden del admin |
+| `startups/tests/test_job_listing.py` | Puestos listados en la página (con encabezado y remoto), links a tableros, `JobPosting`, postulaciones genéricas, "no open positions", detección de tableros, directorio de plataformas, links "open positions" |
+| `startups/tests/test_job_boards.py` | Ashby (solo listados), Greenhouse (`first_published`), Lever (sin postulaciones genéricas, host EU), tablero inexistente |
+| `startups/tests/test_openings.py` | Tablero embebido, búsquedas viejas, tablero vacío, puestos de la página sin fecha, "no open positions", página ilegible, robots.txt, API caída, tablero de un aviso de Who is hiring, sin señal, reemplazo, señal directa a un tablero, señales que no son una página propia, redirect con tablero, link "open positions" |
+| `startups/tests/test_openings_tasks.py` | Re-verificación semanal (vencidas, frescas, nunca verificadas, descartadas), tarea horaria, a quiénes verificar, comando `verify_openings` |
+| `startups/tests/test_startup_queryset.py` | Anotaciones de búsquedas, contactos y análisis; orden y filtro del admin |
 | `startups/tests/test_page_metrics.py` | Texto visible, links y contenedores de framework; regla de probable SPA vacía |
 | `startups/tests/test_inspection_stats.py` | Conteo de probables SPA vacías y de inspecciones sin métricas; `inspect_websites --stats` no inspecciona |
 | `startups/tests/test_inspection_tasks.py` | Encolar marca `pending` y solo para startups con dominio propio; la tarea usa el servicio; el comando `inspect_websites` con y sin `--all` |

@@ -1,3 +1,5 @@
+from unittest import mock
+
 import httpx
 import pytest
 
@@ -12,6 +14,7 @@ from startups.constants import (
     HiringSignalKind,
     HiringSignalMethod,
     InspectionStatus,
+    OpeningsStatus,
 )
 from startups.ingestion import StartupIngestionService
 from startups.models import WebsiteInspection
@@ -61,9 +64,12 @@ def unreachable_site(request):
     raise httpx.ConnectError("unreachable", request=request)
 
 
-def build_service(handler):
+def build_service(handler, openings_verifier=None):
+    """The openings check has its own tests: here it is a mock unless one is given."""
     client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
-    return WebsiteInspectionService(http_client=client)
+    return WebsiteInspectionService(
+        http_client=client, openings_verifier=openings_verifier or mock.Mock()
+    )
 
 
 def create_startup(website="https://acme.com"):
@@ -306,3 +312,17 @@ def test_at_most_a_few_contact_pages_are_visited():
 
     visited_contact_pages = [path for path in site.requested_paths if path.endswith("/about")]
     assert len(visited_contact_pages) == CONTACT_MAX_EXTRA_PAGES
+
+
+def test_openings_are_checked_after_the_inspection_reusing_its_robots_txt():
+    startup = create_startup()
+    site = FakeSite(
+        {"/": HOME_WITH_SIGNAL, "/careers": "<a href='/careers/backend'>Backend Engineer</a>"}
+    )
+    client = httpx.Client(transport=httpx.MockTransport(site), follow_redirects=True)
+
+    inspection = WebsiteInspectionService(http_client=client).inspect(startup)
+
+    assert inspection.openings_status == OpeningsStatus.ACTIVE
+    assert startup.job_openings.get().title == "Backend Engineer"
+    assert site.requested_paths.count("/robots.txt") == 1

@@ -1,12 +1,46 @@
-from startups.constants import ContactStatus
+from startups.constants import ContactStatus, OpeningsStatus
 
 STARTUPS_PER_PAGE = 50
 RUNS_PER_SOURCE = 20
 HTMX_REQUEST_HEADER = "HX-Request"
-# Values of the yes/no filters of the startup list.
-FILTER_YES = "yes"
-FILTER_NO = "no"
-YES_NO_CHOICES = [("", "Todas"), (FILTER_YES, "Sí"), (FILTER_NO, "No")]
+# Openings filter of the startup list. By default it shows only startups with active openings.
+OPENINGS_FILTER_ALL = "all"
+OPENINGS_FILTER_DEFAULT = OpeningsStatus.ACTIVE
+OPENINGS_FILTER_CHOICES = [
+    (OpeningsStatus.ACTIVE, "Con búsquedas activas"),
+    (OpeningsStatus.UNVERIFIED, "Señal sin verificar"),
+    (OpeningsStatus.NONE, "Sin búsquedas activas"),
+    (OpeningsStatus.NOT_CHECKED, "Sin señal"),
+    (OPENINGS_FILTER_ALL, "Todas"),
+]
+CONTACT_FILTER_PERSON = "person"
+CONTACT_FILTER_GENERAL = "general"
+CONTACT_FILTER_NONE = "none"
+CONTACT_FILTER_CHOICES = [
+    ("", "Todos"),
+    (CONTACT_FILTER_PERSON, "Con CEO, CTO o founder"),
+    (CONTACT_FILTER_GENERAL, "Solo mail general"),
+    (CONTACT_FILTER_NONE, "Sin contacto"),
+]
+ANALYSIS_FILTER_NONE = "none"
+ANALYSIS_FILTER_DRAFT = "draft"
+ANALYSIS_FILTER_SENT = "sent"
+ANALYSIS_FILTER_CHOICES = [
+    ("", "Todos"),
+    (ANALYSIS_FILTER_NONE, "Sin análisis"),
+    (ANALYSIS_FILTER_DRAFT, "Solo borradores"),
+    (ANALYSIS_FILTER_SENT, "Enviado"),
+]
+ORDER_PRIORITY = ""
+ORDER_NEWEST = "newest"
+ORDER_MOST_OPENINGS = "most_openings"
+ORDER_CHOICES = [
+    (ORDER_PRIORITY, "Búsqueda más reciente"),
+    (ORDER_NEWEST, "Vistas más recientemente"),
+    (ORDER_MOST_OPENINGS, "Más búsquedas"),
+]
+# Openings shown in each row of the list; the detail page shows them all.
+OPENINGS_PER_ROW = 3
 # Labels of the startup fields merged from the sources, in display order.
 MERGED_FIELD_LABELS = (
     ("name", "Nombre"),

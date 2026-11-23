@@ -12,6 +12,7 @@ from web.constants import (
     INVALID_WEBSITE_MESSAGE,
     MERGED_FIELD_LABELS,
     MISSING_DISCARD_REASON_MESSAGE,
+    OPENINGS_FILTER_DEFAULT,
     STARTUPS_PER_PAGE,
 )
 from web.filters import filter_startups, startup_list_queryset
@@ -29,11 +30,14 @@ from web.views.contacts import contacts_context
 
 
 def startup_list(request):
-    filter_form = StartupFilterForm(request.GET or None)
+    query = request.GET.copy()
+    # A clean list by default: only startups with active openings.
+    query.setdefault("openings", OPENINGS_FILTER_DEFAULT)
+    filter_form = StartupFilterForm(query)
     filters = filter_form.cleaned_data if filter_form.is_valid() else {}
     startups = filter_startups(startup_list_queryset(), filters)
     page_obj = Paginator(startups, STARTUPS_PER_PAGE).get_page(request.GET.get("page"))
-    query_without_page = request.GET.copy()
+    query_without_page = query.copy()
     query_without_page.pop("page", None)
     context = {
         "filter_form": filter_form,
@@ -60,7 +64,7 @@ def startup_discard(request, pk):
 
 
 def startup_detail(request, pk):
-    startup = get_object_or_404(Startup.objects.with_hiring_signal(), pk=pk)
+    startup = get_object_or_404(Startup.objects.with_openings(), pk=pk)
     source_records = startup.source_records.select_related("source").order_by("-first_seen_at")
     context = {
         "startup": startup,
@@ -71,6 +75,7 @@ def startup_detail(request, pk):
             record for record in source_records if record.source.key == SourceKey.HACKER_NEWS_HIRING
         ],
         "inspection": getattr(startup, "website_inspection", None),
+        "openings": startup.job_openings.all(),
         "status_form": StatusForm(initial={"status": startup.status}),
         "status_changes": startup.status_changes.all(),
         "possible_duplicates": startup.possible_duplicates.all(),

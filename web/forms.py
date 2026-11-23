@@ -4,10 +4,19 @@ from django.utils import timezone
 from sources.constants import SourceKey
 from startups.constants import ContactStatus, StartupStatus
 from startups.models import Analysis, Contact
-from web.constants import CONTACT_WITHOUT_CHANNEL_MESSAGE, YES_NO_CHOICES
+from web.constants import (
+    ANALYSIS_FILTER_CHOICES,
+    CONTACT_FILTER_CHOICES,
+    CONTACT_WITHOUT_CHANNEL_MESSAGE,
+    OPENINGS_FILTER_CHOICES,
+    ORDER_CHOICES,
+)
 
 
 class StartupFilterForm(forms.Form):
+    openings = forms.ChoiceField(required=False, label="Búsquedas", choices=OPENINGS_FILTER_CHOICES)
+    role = forms.CharField(required=False, label="Puesto contiene")
+    remote = forms.BooleanField(required=False, label="Con puesto remoto")
     q = forms.CharField(required=False, label="Buscar")
     status = forms.ChoiceField(
         required=False,
@@ -18,11 +27,12 @@ class StartupFilterForm(forms.Form):
         required=False, label="Fuente", choices=[("", "Todas"), *SourceKey.choices]
     )
     country = forms.CharField(required=False, label="País", max_length=2)
-    hiring = forms.ChoiceField(required=False, label="Búsquedas abiertas", choices=YES_NO_CHOICES)
-    has_contact = forms.ChoiceField(required=False, label="Tiene contacto", choices=YES_NO_CHOICES)
+    contact = forms.ChoiceField(required=False, label="Contacto", choices=CONTACT_FILTER_CHOICES)
+    analysis = forms.ChoiceField(required=False, label="Análisis", choices=ANALYSIS_FILTER_CHOICES)
     since = forms.DateField(
         required=False, label="Vista desde", widget=forms.DateInput(attrs={"type": "date"})
     )
+    order = forms.ChoiceField(required=False, label="Orden", choices=ORDER_CHOICES)
 
 
 class DiscardForm(forms.Form):

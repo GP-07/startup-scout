@@ -61,6 +61,13 @@ shell, to check them by hand (inspections made before these metrics existed need
 docker compose run --rm web python manage.py inspect_websites --stats
 ```
 
+Check which startups publish active openings today, on their website or their Ashby,
+Greenhouse or Lever board (new startups are checked automatically, and every week again):
+
+```bash
+docker compose run --rm web python manage.py verify_openings
+```
+
 If you add platforms to the identity rules, clean up the domains already stored first:
 
 ```bash
@@ -83,6 +90,7 @@ docker compose run --rm web ruff check .
 - [x] Phase 3b — "Who is hiring?" source, hiring signal from recent posts, single-page-app metrics
 - [x] Phase 4 — contacts from the startup's own website and Hacker News authors
 - [x] Phase 5 — web UI: list, detail, contacts, analyses, statuses, manual entry, duplicates, runs
+- [x] Phase 5b — active openings verified on the website or job board; clean list and filters
 
 ## License
 

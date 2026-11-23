@@ -35,7 +35,9 @@ class ContactRole(models.TextChoices):
     GENERAL = "general", "Contacto general"
 
 
-# Contacts worth writing to: the "has contact" filter of the startup list counts only these.
+# People who decide: the "contact" filter of the startup list looks for these first.
+PERSON_CONTACT_ROLES = (ContactRole.CEO, ContactRole.CTO, ContactRole.FOUNDER)
+# Contacts worth writing to: a person who decides or a general mailbox.
 KEY_CONTACT_ROLES = (
     ContactRole.CEO,
     ContactRole.CTO,
@@ -226,22 +228,6 @@ class InspectionStatus(models.TextChoices):
     DONE = "done", "Inspeccionada"
     BLOCKED = "blocked", "Bloqueada por robots.txt"
     FAILED = "failed", "Con error"
-
-
-# A "Who is hiring?" post counts as a hiring signal for this long after it was published.
-HIRING_POST_MAX_AGE_DAYS = 60
-
-
-class HiringSignalOrigin(models.TextChoices):
-    WEBSITE = "website", "Web"
-    HIRING_POST = "hiring_post", "Who is hiring"
-    BOTH = "both", "Web + Who is hiring"
-
-
-# Admin filter of startups by hiring signal.
-HIRING_FILTER_PARAMETER = "hiring_signal"
-HIRING_FILTER_YES = "yes"
-HIRING_FILTER_NO = "no"
 
 
 class HiringSignalMethod(models.TextChoices):
@@ -520,3 +506,160 @@ NOT_NAME_WORDS = frozenset(
         "with",
     }
 )
+
+
+# Open positions actually published today (docs/startup-scout-design.md §3).
+class OpeningsStatus(models.TextChoices):
+    NOT_CHECKED = "not_checked", "Sin señal"
+    ACTIVE = "active", "Búsquedas activas"
+    NONE = "none", "Sin búsquedas activas"
+    UNVERIFIED = "unverified", "Sin verificar"
+
+
+class OpeningOrigin(models.TextChoices):
+    ASHBY = "ashby", "Ashby"
+    GREENHOUSE = "greenhouse", "Greenhouse"
+    LEVER = "lever", "Lever"
+    WEBSITE = "website", "Web de la startup"
+
+
+class JobBoardProvider(models.TextChoices):
+    """Job boards whose official public API lists a company's openings with their dates."""
+
+    ASHBY = "ashby", "Ashby"
+    GREENHOUSE = "greenhouse", "Greenhouse"
+    LEVER = "lever", "Lever"
+
+
+# An opening with a publication date counts while it is this recent. Openings listed on the
+# startup's own page usually have no date: those count while they are published.
+OPENINGS_MAX_AGE_DAYS = 60
+# Openings change: they are checked again once they are this old, a batch per hourly run.
+OPENINGS_RECHECK_DAYS = 7
+OPENINGS_RECHECK_BATCH = 50
+OPENINGS_RECHECK_MINUTE = 30
+OPENINGS_RECHECK_LOCK = "openings-recheck"
+WEB_URL_SCHEMES = frozenset({"http", "https"})
+# Cloudflare replaces email addresses with links to this path: not a page to read.
+EMAIL_PROTECTION_PATH = "/cdn-cgi/l/email-protection"
+# A careers page often only links to where the jobs are ("See open positions").
+OPEN_POSITIONS_LINK_PHRASES = (
+    "all jobs",
+    "current openings",
+    "explore our open positions",
+    "job openings",
+    "open positions",
+    "open roles",
+    "see jobs",
+    "view jobs",
+    "view open roles",
+    "view openings",
+    "posiciones abiertas",
+    "busquedas abiertas",
+    "ver vacantes",
+)
+OPEN_POSITIONS_LINKS_FOLLOWED = 2
+
+ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{slug}"
+ASHBY_BOARD_URL = "https://jobs.ashbyhq.com/{slug}"
+GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs"
+GREENHOUSE_BOARD_URL = "https://job-boards.greenhouse.io/{slug}"
+# Lever hosts some accounts in the EU: a 404 on the first host is retried on the second.
+LEVER_API_URLS = (
+    "https://api.lever.co/v0/postings/{slug}",
+    "https://api.eu.lever.co/v0/postings/{slug}",
+)
+LEVER_API_PARAMS = {"mode": "json"}
+LEVER_BOARD_URL = "https://jobs.lever.co/{slug}"
+LEVER_REMOTE_WORKPLACE = "remote"
+LEVER_ONSITE_WORKPLACES = frozenset({"onsite", "on-site", "hybrid"})
+MILLISECONDS_PER_SECOND = 1000
+# Where each job board appears in a page or a link, with the company's board slug captured.
+JOB_BOARD_PATTERNS = (
+    (JobBoardProvider.ASHBY, re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9][\w.%-]*)")),
+    (
+        JobBoardProvider.GREENHOUSE,
+        re.compile(
+            r"(?:job-)?boards(?:\.eu)?\.greenhouse\.io/(?:embed/job_board(?:/js)?\?for=)?([\w-]+)"
+        ),
+    ),
+    (JobBoardProvider.LEVER, re.compile(r"jobs(?:\.eu)?\.lever\.co/([\w.-]+)")),
+)
+JOB_BOARD_RESERVED_SLUGS = frozenset({"api", "embed", "js", "v1"})
+# `jobs.ashbyhq.com/acme/<job id>` is a job's page; `jobs.ashbyhq.com/acme` is the whole board.
+JOB_BOARD_JOB_PAGE_MIN_SEGMENTS = 2
+JOB_BOARD_URLS = {
+    JobBoardProvider.ASHBY: ASHBY_BOARD_URL,
+    JobBoardProvider.GREENHOUSE: GREENHOUSE_BOARD_URL,
+    JobBoardProvider.LEVER: LEVER_BOARD_URL,
+}
+# A link on a careers page is an opening when it goes to a job page and its text names a job.
+JOB_PAGE_PATH_PATTERN = re.compile(
+    r"/(?:careers?|jobs?|positions?|openings?|roles?|vacanc(?:y|ies)|empleos?|vacantes?|join-us)"
+    r"/[^/]+/?$"
+)
+JOB_TITLE_WORDS = (
+    "account executive",
+    "analyst",
+    "architect",
+    "designer",
+    "desarrollador",
+    "desarrolladora",
+    "developer",
+    "director",
+    "disenador",
+    "disenadora",
+    "engineer",
+    "head",
+    "ingeniera",
+    "ingeniero",
+    "intern",
+    "lead",
+    "manager",
+    "marketing",
+    "operations",
+    "programador",
+    "recruiter",
+    "researcher",
+    "sales",
+    "scientist",
+    "specialist",
+    "success",
+    "support",
+    "writer",
+)
+JOB_TITLE_MAX_LENGTH = 200
+JOB_LOCATION_MAX_LENGTH = 200
+JOB_TITLE_TAGS = ("h1", "h2", "h3", "h4", "h5", "h6", "strong")
+# Normalized phrases of applications that are not an opening (a pool of candidates).
+GENERIC_APPLICATION_PHRASES = (
+    "candidatura abierta",
+    "candidatura espontanea",
+    "don t see",
+    "dont see",
+    "future opportunities",
+    "general application",
+    "open application",
+    "spontaneous application",
+    "talent pool",
+    "unsolicited application",
+)
+# Normalized phrases of a careers page without openings.
+NO_OPENINGS_PHRASES = (
+    "no current openings",
+    "no hay busquedas abiertas",
+    "no hay posiciones abiertas",
+    "no hay vacantes",
+    "no job openings",
+    "no open positions",
+    "no open roles",
+    "no openings",
+    "no positions available",
+    "no tenemos posiciones abiertas",
+    "no vacancies",
+    "not currently hiring",
+    "not hiring right now",
+)
+REMOTE_WORDS = ("remote", "remoto", "remota", "anywhere", "telecommute")
+JSON_LD_JOB_POSTING_TYPE = "JobPosting"
+JSON_LD_REMOTE_LOCATION_TYPE = "TELECOMMUTE"

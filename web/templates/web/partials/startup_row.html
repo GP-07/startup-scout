@@ -6,8 +6,18 @@
     {% if startup.description %}<br><span class="muted">{{ startup.description|truncatechars:110 }}</span>{% endif %}
   </td>
   <td>
-    {% if startup.has_website_hiring_signal %}<span class="badge badge-hiring">Web</span>{% endif %}
-    {% if startup.has_recent_hiring_post %}<span class="badge badge-hiring">Who is hiring</span>{% endif %}
+    {% if startup.openings_state == 'active' %}
+      <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }}</span>
+      <ul class="openings">
+        {% for opening in startup|first_openings %}
+          <li>{{ opening.title|truncatechars:60 }}{% if opening.is_remote %} · <em>remoto</em>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    {% elif startup.openings_state == 'unverified' %}
+      <span class="badge">Señal sin verificar</span>
+    {% elif startup.openings_state == 'none' %}
+      <span class="badge badge-muted">Sin búsquedas activas</span>
+    {% endif %}
   </td>
   <td>{{ startup.get_status_display }}</td>
   <td>{{ startup|source_names }}</td>

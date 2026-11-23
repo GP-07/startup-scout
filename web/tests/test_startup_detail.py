@@ -2,8 +2,16 @@ from datetime import date
 
 from django.urls import reverse
 
-from startups.constants import ContactFoundVia, ContactRole, ContactStatus, StartupStatus
-from startups.models import Analysis, Contact
+from startups.constants import (
+    ContactFoundVia,
+    ContactRole,
+    ContactStatus,
+    InspectionStatus,
+    OpeningOrigin,
+    OpeningsStatus,
+    StartupStatus,
+)
+from startups.models import Analysis, Contact, JobOpening, WebsiteInspection
 from web.tests.helpers import create_contact, create_startup
 
 
@@ -137,3 +145,28 @@ def test_analysis_body_is_rendered_as_markdown_without_raw_html(logged_client):
 
     assert "<strong>bold</strong>" in content
     assert "<script>alert(1)</script>" not in content
+
+
+def test_detail_lists_the_active_openings(logged_client):
+    startup = create_startup("Acme", "acme.com")
+    WebsiteInspection.objects.create(
+        startup=startup,
+        status=InspectionStatus.DONE,
+        openings_status=OpeningsStatus.ACTIVE,
+        openings_url="https://acme.com/careers",
+    )
+    JobOpening.objects.create(
+        startup=startup,
+        title="Backend Engineer",
+        location="Remote",
+        is_remote=True,
+        url="https://acme.com/careers/backend",
+        origin=OpeningOrigin.WEBSITE,
+    )
+
+    content = logged_client.get(detail_url(startup)).content.decode()
+
+    assert "Búsquedas activas" in content
+    assert "Backend Engineer" in content
+    assert "https://acme.com/careers/backend" in content
+    assert "sin fecha" in content

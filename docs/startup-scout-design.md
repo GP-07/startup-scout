@@ -92,9 +92,16 @@ Lección para fuentes futuras: **robots.txt no alcanza**. Antes de escribir un a
 
 Se guarda **qué** disparó la señal (URL, texto y método: `home` o `path_probe`) como evidencia, para revisar los falsos positivos. Es una señal, no una certeza: una página de "Careers" puede no tener búsquedas activas.
 
-### Señal por aviso en "Who is hiring?"
+### Búsquedas activas: la señal se verifica (2026-11-23)
 
-Una startup también tiene señal si publicó en "Who is hiring?" en los **últimos 60 días** (`HIRING_POST_MAX_AGE_DAYS`): un aviso viejo no dice nada sobre hoy. No se guarda un flag: se calcula con `Startup.objects.with_hiring_signal()`, que anota de dónde sale la señal (web, aviso o las dos). Para eso `SourceRecord` guarda `published_at`, la fecha en que la fuente publicó el aviso. La web de estas startups se inspecciona igual, porque la fase 4 saca de ahí los contactos.
+Una señal (un link a "Careers") dice que la startup tiene dónde publicar búsquedas, no que tenga alguna. La lista que importa es la de startups con **búsquedas activas**: puestos publicados **hoy** en su web o en la plataforma que usan.
+
+- **Qué es una búsqueda activa**: un puesto publicado hoy en la web de la startup o en su tablero de Ashby, Greenhouse o Lever, que no es una postulación genérica ("Talent pool", "General application", "Open application"…). Si la web o la plataforma informan la fecha de publicación, tiene que ser de los **últimos 60 días**. Si no la informan (lo habitual en páginas propias), cuenta mientras siga publicada, sin límite de antigüedad (decisión del 2026-11-23).
+- **Cómo se verifica**, en orden: (1) si la página o el link es de Ashby, Greenhouse o Lever, su **API pública oficial** da la lista exacta con fechas; (2) si no, la página de careers: los puestos que lista (links a páginas de puestos o `JobPosting` de schema.org) o una frase como "No open positions"; (3) si la página solo tiene un link "See open positions", se sigue ese link un salto. Si nada alcanza, queda **sin verificar**. Workable queda afuera: su endpoint público no está documentado.
+- **Solo se lee la página de careers de la propia startup** (su dominio, su página en YC o Wellfound, o su tablero). Una señal que apunta a otro sitio, como la bolsa de trabajo de la plataforma que la aloja, queda sin verificar.
+- **Who is hiring es una pista, no una prueba.** Un aviso no alcanza: la startup entra a la lista solo si la búsqueda está activa en su web o su plataforma. Los links a tableros de Ashby, Greenhouse o Lever del aviso sirven para encontrar la plataforma aunque la web no la muestre.
+- **Re-verificación semanal**: las búsquedas cierran. Cada startup no descartada se vuelve a verificar una vez por semana (de a 50 por hora, con el mismo esquema que recupera las corridas perdidas). Cada verificación reemplaza la lista de puestos.
+- **Límite**: las páginas que arman la lista con JavaScript desde la API de su plataforma no dejan rastro en el HTML y quedan sin verificar. Adivinar el tablero por el nombre de la startup leería, con nombres comunes, el de otra empresa.
 
 ### Medición de SPA vacías
 
@@ -202,7 +209,8 @@ flowchart LR
 - `StartupDomain`: startup, domain (unique), is_primary.
 - `SourceRecord`: startup, source (FK `Source`), external_id, url, data (JSON: los campos ya mapeados, de donde se recalcula el merge), payload (JSON crudo de la fuente), published_at (cuándo lo publicó la fuente, si lo informa), first_seen_at, fetched_at. Unique en `(source, external_id)`.
 - `SourceRun`: source (FK `Source`), started_at, finished_at, status, items_seen, items_new, error, cursor (JSON: el último `created_at` de HN o el set de URLs del sitemap).
-- `WebsiteInspection` (fase 3): startup (uno a uno), status (`pending|done|blocked|failed`), inspected_at, has_hiring_signal, hiring_signal_method (`home|path_probe`), hiring_signal_kind (`job_board|link_path|link_text|email|phrase`), hiring_signal_url, hiring_signal_text, home_text_length, home_link_count, home_has_app_root, error.
+- `WebsiteInspection` (fase 3): startup (uno a uno), status (`pending|done|blocked|failed`), inspected_at, has_hiring_signal, hiring_signal_method (`home|path_probe`), hiring_signal_kind (`job_board|link_path|link_text|email|phrase`), hiring_signal_url, hiring_signal_text, home_text_length, home_link_count, home_has_app_root, contacts_found, openings_status (`not_checked|active|none|unverified`), openings_checked_at, openings_url, error.
+- `JobOpening`: startup, title, location, is_remote (nulo si no se sabe), url, published_at (nulo si no se informa), origin (`ashby|greenhouse|lever|website`). Solo las búsquedas activas; cada verificación las reemplaza.
 - `Contact`: startup, full_name, role (`ceo|cto|founder|other|general`), email, profile_url, found_via (`source|website|manual`), evidence_url, status (`candidate|confirmed|rejected`).
 - `Analysis`: startup, title, body (markdown), sent_at (nullable), sent_to (FK `Contact`, nullable), created_at, updated_at.
 - `StatusChange`: startup, from_status, to_status, note, changed_at.
@@ -219,7 +227,8 @@ flowchart LR
 
 Decisiones de la implementación (fase 5):
 - **Acceso**: todas las páginas piden sesión (`LoginRequiredMiddleware`); se entra con el usuario de Django (`createsuperuser`) desde el login del admin.
-- **"Tiene contacto"** cuenta solo a un CEO, CTO, founder o mail general que no esté rechazado. El autor de HN no cuenta: casi todas las startups de HN lo tienen y el filtro no serviría.
+- **Lista limpia por defecto**: solo startups con búsquedas activas, con la búsqueda más reciente primero. Filtros: búsquedas (activas, sin verificar, sin búsquedas activas, sin señal, todas), puesto (texto en los títulos), con puesto remoto, contacto (con CEO/CTO/founder, solo mail general, sin contacto), análisis (sin análisis, solo borradores, enviado), texto, estado, fuente, país, fecha y orden.
+- **Contacto**: no cuenta a los rechazados ni al autor de HN (rol "otro"): casi todas las startups de HN lo tienen y el filtro no serviría.
 - **Listado**: sin filtro de estado oculta las descartadas. Los filtros se aplican mientras escribo (HTMX) y quedan en la URL.
 - **Análisis**: el Markdown se renderiza con `markdown` y se limpia con `nh3`, así un `<script>` en el texto no se ejecuta. Marcar como enviado pide la fecha (hoy por defecto) y, opcionalmente, el contacto.
 - **Contactos cargados a mano** quedan confirmados y necesitan un mail o un perfil.
@@ -237,6 +246,7 @@ Cada fase arranca por los tests de los casos de uso (TDD) y cierra con una revis
 | 3. Búsquedas abiertas ✅ | `WebsiteInspection`: la home como estrategia principal y las rutas típicas como fallback, respetando robots.txt. Se encola al crear una startup; comando `inspect_websites` para las existentes | Tests con HTML ficticio (link en el nav o el footer, plataforma de búsqueda, frase, "Join us on Discord" que no cuenta, fallback por ruta, redirect a la home que no cuenta, robots.txt, SPA vacía). Corrida real sobre las startups que ya hay, midiendo cuántas tienen señal y revisando una muestra a mano |
 | 3b. Who is hiring ✅ | Adaptador de "Ask HN: Who is hiring?"; señal por aviso reciente; métricas de la home y `inspect_websites --stats` para medir las SPA | Tests con un hilo ficticio. Corrida real sobre el hilo de noviembre de 2026 (§5.4 de la arquitectura) |
 | 4. Contactos ✅ | Se suma a la misma inspección de la fase 3: mailto, LinkedIn, JSON-LD y cargos en `/about`, `/team`, etc., más el autor de HN | Las startups nuevas aparecen con candidatos y evidencia; tests con HTML ficticio |
+| 5b. Búsquedas activas ✅ | Verificación con las APIs de Ashby, Greenhouse y Lever o la página de careers; `JobOpening`; re-verificación semanal; lista limpia y filtros nuevos | Tests sin red; corrida real sobre las 184 startups con señal o aviso |
 | 5. Frontend ✅ | Listado, ficha, contactos, CRUD de análisis con marca de enviado, estados e historial, alta manual, fusión de duplicados, corridas | Todo el flujo manual se hace desde la web |
 
 **MVP terminado** cuando corre una semana solo, descubriendo cada día, y yo hago el ciclo completo con al menos una startup: la reviso, escribo el análisis, tomo el contacto de la ficha, se lo mando desde mi casilla y lo marco como enviado.
