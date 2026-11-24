@@ -20,6 +20,7 @@ from startups.constants import (
     JOB_BOARD_PATTERNS,
     JOB_BOARD_RESERVED_SLUGS,
     JOB_BOARD_URLS,
+    JOB_DESCRIPTION_MAX_LENGTH,
     JOB_LOCATION_MAX_LENGTH,
     JOB_PAGE_PATH_PATTERN,
     JOB_SECTION_DOMAINS,
@@ -52,6 +53,8 @@ class OpeningCandidate:
     origin: str
     # The country the source states apart from the location text: a name or an ISO code.
     country_hint: str = ""
+    # Its description, plain text or HTML, when the source gives it (job boards, schema.org).
+    description: str = ""
 
 
 @dataclass(frozen=True)
@@ -217,6 +220,7 @@ def _json_ld_openings(soup, page_url):
                     published_at=parse_publication_date(posting.get("datePosted")),
                     origin=OpeningOrigin.WEBSITE,
                     country_hint=_json_ld_country(posting),
+                    description=str(posting.get("description") or "")[:JOB_DESCRIPTION_MAX_LENGTH],
                 )
             )
     return openings

@@ -2,7 +2,11 @@ from collections import Counter
 
 from django.core.management.base import BaseCommand
 
-from startups.constants import ALREADY_INSPECTED_STATUSES, INSPECTION_PROGRESS_EVERY
+from startups.constants import (
+    ALREADY_INSPECTED_STATUSES,
+    INSPECTION_PROGRESS_EVERY,
+    StartupStatus,
+)
 from startups.inspection_stats import spa_shell_stats
 from startups.models import Startup
 from startups.website_inspection import WebsiteInspectionService
@@ -30,7 +34,12 @@ class Command(BaseCommand):
         if options["stats"]:
             self._print_spa_shell_stats()
             return
-        startups = Startup.objects.filter(domains__is_primary=True).distinct().order_by("id")
+        startups = (
+            Startup.objects.filter(domains__is_primary=True)
+            .exclude(status=StartupStatus.DISCARDED)
+            .distinct()
+            .order_by("id")
+        )
         if not options["all"]:
             startups = startups.exclude(website_inspection__status__in=ALREADY_INSPECTED_STATUSES)
         if options["limit"]:

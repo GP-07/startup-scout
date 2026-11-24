@@ -5,6 +5,8 @@ from django.views.decorators.http import require_POST
 
 from sources.constants import SourceKey
 from sources.manual_entry import add_startup_manually
+from startups.blacklist import blacklist_startup
+from startups.constants import BLACKLIST_DEFAULT_REASON
 from startups.exceptions import (
     DiscardReasonRequiredError,
     InvalidWebsiteError,
@@ -120,6 +122,16 @@ def startup_location(request, pk):
         correct_location(startup, form.cleaned_data["country"], city=form.cleaned_data["city"])
     except UnknownCountryError:
         messages.error(request, UNKNOWN_COUNTRY_MESSAGE)
+    return redirect("web:startup_detail", pk=startup.pk)
+
+
+@require_POST
+def startup_blacklist(request, pk):
+    """A job board or another site that is not a startup: blacklist it and discard it."""
+    startup = get_object_or_404(Startup, pk=pk)
+    reason = request.POST.get("reason", "").strip() or BLACKLIST_DEFAULT_REASON
+    blacklist_startup(startup, reason)
+    messages.success(request, "En la lista negra: descartada y no se vuelve a inspeccionar.")
     return redirect("web:startup_detail", pk=startup.pk)
 
 

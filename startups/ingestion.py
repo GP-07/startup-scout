@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from django.db import IntegrityError, transaction
 
 from sources.models import SourceRecord
+from startups.blacklist import blacklist_reason
 from startups.constants import MAX_INGESTION_ATTEMPTS, ContactFoundVia
 from startups.contacts import save_contacts
 from startups.domains import is_identifying_domain, normalize_domain, normalize_name
@@ -11,6 +12,7 @@ from startups.exceptions import IngestionConflictError, InvalidWebsiteError
 from startups.merge import recompute_startup
 from startups.models import Startup, StartupDomain
 from startups.redirects import HttpRedirectResolver
+from startups.status import discard_startup
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +106,10 @@ class StartupIngestionService:
         )
         save_contacts(startup, raw_startup.contacts, ContactFoundVia.SOURCE)
         startup = recompute_startup(startup)
+        reason = blacklist_reason(domains) if created else ""
+        if reason:
+            # A blacklisted site (a job board): it comes in already discarded.
+            discard_startup(startup, reason)
         return IngestionResult(startup=startup, created=created, record_created=True)
 
     def _find_by_domains(self, domains):

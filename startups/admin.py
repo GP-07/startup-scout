@@ -4,6 +4,7 @@ from django.db import models
 from startups.constants import OpeningsStatus
 from startups.models import (
     Analysis,
+    BlacklistedDomain,
     Contact,
     JobOpening,
     Startup,
@@ -136,3 +137,9 @@ class WebsiteInspectionAdmin(admin.ModelAdmin):
     ]
     search_fields = ["startup__name", "hiring_signal_url"]
     raw_id_fields = ["startup"]
+
+
+@admin.register(BlacklistedDomain)
+class BlacklistedDomainAdmin(admin.ModelAdmin):
+    list_display = ["domain", "reason", "created_at"]
+    search_fields = ["domain", "reason"]

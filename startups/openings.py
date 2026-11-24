@@ -44,15 +44,18 @@ from startups.domains import normalize_domain
 from startups.exceptions import InvalidWebsiteError, JobBoardError
 from startups.headquarters import detect_location
 from startups.job_boards import JobBoardClient
+from startups.job_languages import required_other_languages
 from startups.job_listing import (
     extract_openings,
     find_job_board,
     open_positions_links,
     says_no_openings,
 )
+from startups.job_titles import is_technical_title
 from startups.locations import closest_place, country_place, resolve_places
 from startups.models import JobOpening, Startup, WebsiteInspection
 from startups.web_pages import html_of, load_robots, site_root
+from startups.work_eligibility import only_where_i_cannot_work
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +93,8 @@ class OpeningsVerifier:
         """
         self._robots_by_site = dict(known_robots or {})
         inspection, _ = WebsiteInspection.objects.get_or_create(startup=startup)
-        inspection = self._save(inspection, *self._settle(startup, inspection))
+        check, checked = self._settle(startup, inspection)
+        inspection = self._save(inspection, _only_wanted(check, startup.hq_country), checked)
         detect_location(startup)
         return inspection
 
@@ -206,6 +210,7 @@ class OpeningsVerifier:
                 origin=opening.origin,
                 country=place.country if place else "",
                 timezone_name=place.timezone_name if place else "",
+                description=opening.description,
             )
             for opening, place in zip(check.openings, places, strict=True)
         )
@@ -303,6 +308,46 @@ def _closest_top_country(countries, now):
     return place.country if place else ""
 
 
+def is_wanted_opening(title, description, location="", country_hint="", headquarters_country=""):
+    """An opening I look for: a software role I look for, requiring no language besides
+    English and Spanish, and not only in countries where I cannot work (the UK, or elsewhere
+    outside the EU without visa sponsorship).
+
+    `headquarters_country` places an opening that names no place (startups/work_eligibility.py).
+    """
+    return (
+        is_technical_title(title)
+        and not required_other_languages(title, description)
+        and not only_where_i_cannot_work(
+            title, location, country_hint, headquarters_country, description
+        )
+    )
+
+
+def _only_wanted(check, headquarters_country):
+    """The check with only the openings I look for: the rest is discarded.
+
+    A startup whose active openings are all of other kinds has none active.
+    """
+    wanted_openings = [
+        opening
+        for opening in check.openings
+        if is_wanted_opening(
+            opening.title,
+            opening.description,
+            opening.location,
+            opening.country_hint,
+            headquarters_country,
+        )
+    ]
+    status = check.status
+    if status == OpeningsStatus.ACTIVE and not wanted_openings:
+        status = OpeningsStatus.NONE
+    return OpeningsCheck(
+        status, url=check.url, openings=wanted_openings, headquarters=check.headquarters
+    )
+
+
 def _check_from(openings, checked_url, headquarters=""):
     """Active openings: undated ones, or published within OPENINGS_MAX_AGE_DAYS."""
     oldest_active = timezone.now() - timedelta(days=OPENINGS_MAX_AGE_DAYS)
@@ -317,15 +362,47 @@ def _check_from(openings, checked_url, headquarters=""):
     )
 
 
+def prune_unwanted_openings():
+    """Discard the stored openings no longer wanted, after changing the rules of what I look for.
+
+    Startups left without openings have none active. Returns (openings discarded, startups left
+    without openings). No requests: an opening discarded before comes back only by verifying.
+    """
+    stored_openings = JobOpening.objects.values_list(
+        "id", "title", "description", "location", "country", "startup__hq_country"
+    )
+    unwanted_ids = [
+        opening_id
+        for opening_id, title, description, location, country, hq_country in stored_openings
+        # The stored country is where the location was placed, or the job board's country.
+        if not is_wanted_opening(title, description, location, country, hq_country)
+    ]
+    affected_startups = list(Startup.objects.filter(job_openings__id__in=unwanted_ids).distinct())
+    JobOpening.objects.filter(id__in=unwanted_ids).delete()
+    emptied = WebsiteInspection.objects.filter(
+        startup__in=affected_startups,
+        openings_status=OpeningsStatus.ACTIVE,
+        startup__job_openings__isnull=True,
+    ).update(openings_status=OpeningsStatus.NONE)
+    for startup in affected_startups:
+        detect_location(startup)
+    return len(unwanted_ids), emptied
+
+
 def startups_to_verify(include_checked=False):
-    """Startups with something to check: a website hiring signal or a "Who is hiring?" post.
+    """Startups not discarded with something to check: a website hiring signal or a "Who is
+    hiring?" post.
 
     By default only those never checked; `include_checked` checks them all again.
     """
-    candidates = Startup.objects.filter(
-        Q(website_inspection__has_hiring_signal=True)
-        | Q(source_records__source__key=SourceKey.HACKER_NEWS_HIRING)
-    ).distinct()
+    candidates = (
+        Startup.objects.filter(
+            Q(website_inspection__has_hiring_signal=True)
+            | Q(source_records__source__key=SourceKey.HACKER_NEWS_HIRING)
+        )
+        .exclude(status=StartupStatus.DISCARDED)
+        .distinct()
+    )
     if not include_checked:
         candidates = candidates.filter(
             Q(website_inspection__isnull=True)

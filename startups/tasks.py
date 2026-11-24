@@ -8,6 +8,7 @@ from startups.constants import (
     OPENINGS_RECHECK_BATCH,
     OPENINGS_RECHECK_LOCK,
     OPENINGS_RECHECK_MINUTE,
+    StartupStatus,
 )
 from startups.models import Startup
 from startups.openings import OpeningsVerifier, startups_due_for_openings_recheck
@@ -28,8 +29,11 @@ def inspect_website_task(startup_id):
 
 
 def enqueue_website_inspection(startup):
-    """Schedule the inspection of a startup's website. Startups without own domain are skipped."""
-    if primary_domain(startup) is None:
+    """Schedule the inspection of a startup's website.
+
+    Startups without own domain are skipped, and so are discarded ones (a blacklisted site).
+    """
+    if startup.status == StartupStatus.DISCARDED or primary_domain(startup) is None:
         return
     mark_inspection_pending(startup)
     inspect_website_task(startup.id)

@@ -174,10 +174,12 @@ class WebsiteInspection(models.Model):
 
 
 class JobOpening(models.Model):
-    """An opening published today on the startup's website or job board.
+    """An opening I look for, published today on the startup's website or job board.
 
     Each verification replaces the startup's openings: one no longer published disappears.
-    Only active ones are kept: those with a date are at most OPENINGS_MAX_AGE_DAYS old.
+    Only active ones are kept (those with a date are at most OPENINGS_MAX_AGE_DAYS old), and
+    only software roles I look for that require no language besides English and Spanish: the
+    rest is discarded (startups/openings.py).
     """
 
     startup = models.ForeignKey(Startup, on_delete=models.CASCADE, related_name="job_openings")
@@ -191,9 +193,30 @@ class JobOpening(models.Model):
     # Where it is, of the places its location names, the closest to Madrid. Blank if unknown.
     country = models.CharField(max_length=2, blank=True, help_text="ISO 3166-1 alpha-2")
     timezone_name = models.CharField(max_length=64, blank=True, db_index=True, help_text="IANA")
+    # Its description when the job board or the page gives it (plain text or HTML): read to
+    # find the languages it requires, and kept to judge it again (`prune_openings`).
+    description = models.TextField(blank=True)
 
     class Meta:
         ordering = [models.F("published_at").desc(nulls_last=True), "title"]
 
     def __str__(self):
         return f"{self.startup}: {self.title}"
+
+
+class BlacklistedDomain(models.Model):
+    """A site that is not a startup, such as a job board the rules could not tell apart.
+
+    Its startup is discarded and never inspected again; a source that reports it again creates
+    it already discarded (startups/blacklist.py).
+    """
+
+    domain = models.CharField(max_length=255, unique=True)
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["domain"]
+
+    def __str__(self):
+        return self.domain

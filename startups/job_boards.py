@@ -13,13 +13,16 @@ import httpx
 
 from startups.constants import (
     ASHBY_API_URL,
+    GREENHOUSE_API_PARAMS,
     GREENHOUSE_API_URL,
     GREENHOUSE_OFFICES_API_URL,
     HTTP_NOT_FOUND,
+    JOB_DESCRIPTION_MAX_LENGTH,
     JOB_LOCATION_MAX_LENGTH,
     JOB_TITLE_MAX_LENGTH,
     LEVER_API_PARAMS,
     LEVER_API_URLS,
+    LEVER_DESCRIPTION_FIELDS,
     LEVER_ONSITE_WORKPLACES,
     LEVER_REMOTE_WORKPLACE,
     MILLISECONDS_PER_SECOND,
@@ -80,13 +83,14 @@ class JobBoardClient:
                 published_at=parse_publication_date(job.get("publishedAt")),
                 origin=OpeningOrigin.ASHBY,
                 country_hint=_ashby_country(job),
+                description=_description(job.get("descriptionPlain")),
             )
             for job in body.get("jobs", [])
             if job.get("isListed", True)
         ]
 
     def _greenhouse_openings(self, slug):
-        body = self._get_json(GREENHOUSE_API_URL.format(slug=slug))
+        body = self._get_json(GREENHOUSE_API_URL.format(slug=slug), params=GREENHOUSE_API_PARAMS)
         openings = []
         for job in body.get("jobs", []):
             location = (job.get("location") or {}).get("name") or ""
@@ -100,6 +104,7 @@ class JobBoardClient:
                         job.get("first_published") or job.get("updated_at")
                     ),
                     origin=OpeningOrigin.GREENHOUSE,
+                    description=_description(job.get("content")),
                 )
             )
         return openings
@@ -125,6 +130,7 @@ class JobBoardClient:
                 published_at=_from_milliseconds(posting.get("createdAt")),
                 origin=OpeningOrigin.LEVER,
                 country_hint=str(posting.get("country") or ""),
+                description=_lever_description(posting),
             )
             for posting in body
         ]
@@ -140,6 +146,19 @@ class JobBoardClient:
             return response.json()
         except ValueError as error:
             raise JobBoardError(f"{url}: not JSON") from error
+
+
+def _lever_description(posting):
+    """Its description, its lists ("Requirements") and its closing text, as one text."""
+    parts = [str(posting.get(field) or "") for field in LEVER_DESCRIPTION_FIELDS]
+    for job_list in posting.get("lists") or []:
+        if isinstance(job_list, dict):
+            parts.append(f"{job_list.get('text') or ''}\n{job_list.get('content') or ''}")
+    return _description("\n".join(part for part in parts if part))
+
+
+def _description(value):
+    return str(value or "")[:JOB_DESCRIPTION_MAX_LENGTH]
 
 
 def _ashby_country(job):

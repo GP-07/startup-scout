@@ -1,7 +1,9 @@
 from datetime import timedelta
+from io import StringIO
 
 import httpx
 import pytest
+from django.core.management import call_command
 from django.utils import timezone
 
 from sources.constants import SourceKey
@@ -187,14 +189,14 @@ def test_careers_page_disallowed_by_robots_is_not_read():
 def test_failing_board_api_falls_back_to_the_page():
     startup = create_startup()
     page_with_board_and_listing = ASHBY_CAREERS_PAGE.replace(
-        "</body>", "<a href='/careers/designer'>Product Designer</a></body>"
+        "</body>", "<a href='/careers/backend'>Backend Engineer</a></body>"
     )
     internet = FakeInternet(pages={CAREERS_URL: page_with_board_and_listing})
 
     inspection = build_verifier(internet).verify(startup)
 
     assert inspection.openings_status == OpeningsStatus.ACTIVE
-    assert startup.job_openings.get().title == "Product Designer"
+    assert startup.job_openings.get().title == "Backend Engineer"
 
 
 def test_job_board_linked_from_a_who_is_hiring_post_is_used_without_website_signal():
@@ -350,3 +352,94 @@ def test_greenhouse_headquarters_is_kept_and_the_location_detected():
     assert inspection.headquarters_location == "Lisbon, Portugal"
     assert startup.hq_country == "PT"
     assert startup.location_source == LocationSource.HEADQUARTERS
+
+
+def test_only_wanted_openings_are_kept_the_rest_is_discarded():
+    startup = create_startup()
+    jobs = ashby_jobs(1, 2, 3, 4)
+    jobs["jobs"][0]["title"] = "Senior Backend Engineer"
+    jobs["jobs"][1]["title"] = "Senior Account Executive"
+    jobs["jobs"][2]["title"] = "Senior Frontend Engineer"
+    jobs["jobs"][2]["descriptionPlain"] = "You are fluent in German and English."
+    jobs["jobs"][3]["title"] = "QA Automation Engineer"
+    internet = FakeInternet(
+        pages={CAREERS_URL: ASHBY_CAREERS_PAGE}, api_responses={ASHBY_API_URL: jobs}
+    )
+
+    inspection = build_verifier(internet).verify(startup)
+
+    assert inspection.openings_status == OpeningsStatus.ACTIVE
+    assert list(startup.job_openings.values_list("title", flat=True)) == ["Senior Backend Engineer"]
+
+
+def test_startup_with_only_unwanted_openings_has_none_active():
+    startup = create_startup()
+    jobs = ashby_jobs(1, 2)
+    jobs["jobs"][0]["title"] = "Founding Engineer"
+    jobs["jobs"][1]["title"] = "Security Engineer"
+    internet = FakeInternet(
+        pages={CAREERS_URL: ASHBY_CAREERS_PAGE}, api_responses={ASHBY_API_URL: jobs}
+    )
+
+    inspection = build_verifier(internet).verify(startup)
+
+    assert inspection.openings_status == OpeningsStatus.NONE
+    assert not startup.job_openings.exists()
+
+
+def test_prune_openings_discards_stored_openings_no_longer_wanted():
+    kept = create_startup()
+    JobOpening.objects.create(startup=kept, title="Backend Engineer", origin=OpeningOrigin.WEBSITE)
+    JobOpening.objects.create(startup=kept, title="QA Engineer", origin=OpeningOrigin.WEBSITE)
+    emptied = Startup.objects.create(name="Beta")
+    WebsiteInspection.objects.create(startup=emptied, openings_status=OpeningsStatus.ACTIVE)
+    JobOpening.objects.create(
+        startup=emptied,
+        title="Frontend Engineer",
+        description="Native German speaker.",
+        origin=OpeningOrigin.WEBSITE,
+    )
+    kept.website_inspection.openings_status = OpeningsStatus.ACTIVE
+    kept.website_inspection.save()
+    output = StringIO()
+
+    call_command("prune_openings", stdout=output)
+
+    assert list(JobOpening.objects.values_list("title", flat=True)) == ["Backend Engineer"]
+    emptied.website_inspection.refresh_from_db()
+    kept.website_inspection.refresh_from_db()
+    assert emptied.website_inspection.openings_status == OpeningsStatus.NONE
+    assert kept.website_inspection.openings_status == OpeningsStatus.ACTIVE
+    assert "Discarded 2 openings · startups left without openings: 1" in output.getvalue()
+
+
+def test_openings_only_in_the_uk_are_discarded():
+    startup = create_startup()
+    jobs = ashby_jobs(1, 2, 3)
+    jobs["jobs"][0]["location"] = "London"
+    jobs["jobs"][1]["location"] = "London or Berlin"
+    jobs["jobs"][2]["location"] = "Remote"
+    jobs["jobs"][2]["address"] = {"postalAddress": {"addressCountry": "United Kingdom"}}
+    internet = FakeInternet(
+        pages={CAREERS_URL: ASHBY_CAREERS_PAGE}, api_responses={ASHBY_API_URL: jobs}
+    )
+
+    build_verifier(internet).verify(startup)
+
+    assert list(startup.job_openings.values_list("location", flat=True)) == ["London or Berlin"]
+
+
+def test_unplaced_openings_of_a_uk_startup_are_discarded_by_prune():
+    startup = create_startup()
+    startup.hq_country = "GB"
+    startup.save()
+    WebsiteInspection.objects.filter(startup=startup).update(openings_status=OpeningsStatus.ACTIVE)
+    JobOpening.objects.create(
+        startup=startup, title="Senior Full-Stack Engineer", origin=OpeningOrigin.WEBSITE
+    )
+
+    call_command("prune_openings", stdout=StringIO())
+
+    assert not startup.job_openings.exists()
+    startup.website_inspection.refresh_from_db()
+    assert startup.website_inspection.openings_status == OpeningsStatus.NONE

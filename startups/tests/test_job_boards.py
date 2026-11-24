@@ -167,3 +167,29 @@ def test_headquarters_is_blank_for_other_boards_or_without_such_office():
     assert client.fetch_headquarters(JobBoard(JobBoardProvider.GREENHOUSE, "acme")) == ""
     assert client.fetch_headquarters(JobBoard(JobBoardProvider.ASHBY, "acme")) == ""
     assert apis.requested_urls == ["https://boards-api.greenhouse.io/v1/boards/acme/offices"]
+
+
+def test_descriptions_are_read_from_the_three_boards():
+    ashby_job = {**ASHBY_RESPONSE["jobs"][0], "descriptionPlain": "Fluent German required."}
+    greenhouse_job = {**GREENHOUSE_RESPONSE["jobs"][0], "content": "&lt;p&gt;Python&lt;/p&gt;"}
+    lever_posting = {
+        **LEVER_RESPONSE[0],
+        "descriptionPlain": "We build things.",
+        "lists": [{"text": "Requirements", "content": "<li>Native French</li>"}],
+    }
+    client, _ = build_client(
+        {
+            "https://api.ashbyhq.com/posting-api/job-board/acme": {"jobs": [ashby_job]},
+            "https://boards-api.greenhouse.io/v1/boards/acme/jobs": {"jobs": [greenhouse_job]},
+            "https://api.lever.co/v0/postings/acme": [lever_posting],
+        }
+    )
+
+    [ashby_opening] = client.fetch_openings(JobBoard(JobBoardProvider.ASHBY, "acme"))
+    [greenhouse_opening] = client.fetch_openings(JobBoard(JobBoardProvider.GREENHOUSE, "acme"))
+    [lever_opening] = client.fetch_openings(JobBoard(JobBoardProvider.LEVER, "acme"))
+
+    assert ashby_opening.description == "Fluent German required."
+    assert greenhouse_opening.description == "&lt;p&gt;Python&lt;/p&gt;"
+    assert "Native French" in lever_opening.description
+    assert "We build things." in lever_opening.description

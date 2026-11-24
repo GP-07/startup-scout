@@ -34,6 +34,11 @@
       <input name="note" placeholder="Nota (obligatoria para descartar)" maxlength="255">
       <button type="submit">Cambiar</button>
     </form>
+    <form method="post" action="{% url 'web:startup_blacklist' startup.pk %}" class="stacked">
+      {% csrf_token %}
+      <input name="reason" placeholder="Motivo (por defecto: bolsa de trabajo)" maxlength="255">
+      <button type="submit">No es una startup: a la lista negra</button>
+    </form>
     <h3>Historial</h3>
     <ul class="plain">
       {% for change in status_changes %}

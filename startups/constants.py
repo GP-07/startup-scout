@@ -563,6 +563,8 @@ OPEN_POSITIONS_LINKS_FOLLOWED = 2
 ASHBY_API_URL = "https://api.ashbyhq.com/posting-api/job-board/{slug}"
 ASHBY_BOARD_URL = "https://jobs.ashbyhq.com/{slug}"
 GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{slug}/jobs"
+# `content` adds each job's description, to read the languages it requires.
+GREENHOUSE_API_PARAMS = {"content": "true"}
 GREENHOUSE_BOARD_URL = "https://job-boards.greenhouse.io/{slug}"
 # Lever hosts some accounts in the EU: a 404 on the first host is retried on the second.
 LEVER_API_URLS = (
@@ -630,6 +632,8 @@ JOB_TITLE_WORDS = (
 )
 JOB_TITLE_MAX_LENGTH = 200
 JOB_LOCATION_MAX_LENGTH = 200
+JOB_DESCRIPTION_MAX_LENGTH = 50_000
+LEVER_DESCRIPTION_FIELDS = ("descriptionPlain", "additionalPlain")
 JOB_TITLE_TAGS = ("h1", "h2", "h3", "h4", "h5", "h6", "strong")
 # Normalized phrases of applications that are not an opening (a pool of candidates).
 GENERIC_APPLICATION_PHRASES = (
@@ -850,3 +854,301 @@ ORGANIZATION_ADDRESS_FIELDS = ("addressLocality", "addressRegion", "addressCount
 JSON_LD_ORGANIZATION_TYPES = frozenset(
     {"Corporation", "LocalBusiness", "Organization", "ProfessionalService"}
 )
+
+
+# Technical openings: software roles, to keep only startups that hire for them
+# (docs/startup-scout-design.md §3). Normalized phrases (startups/hiring_signal.normalize_text).
+# A software word makes the title technical by itself ("Software Engineer, Solutions").
+SOFTWARE_ROLE_PHRASES = (
+    "back end",
+    "backend",
+    "cto",
+    "desarrollador",
+    "desarrolladora",
+    "developer",
+    "front end",
+    "frontend",
+    "full stack",
+    "fullstack",
+    "programador",
+    "programadora",
+    "programmer",
+    "software",
+    "tech lead",
+)
+# Specialties left out even with a software word (decision of 2026-11-24): data analytics,
+# forward deployed, security, infrastructure and platforms, developer relations, machine
+# learning and research, DevOps, QA, internships and graduates, founding roles, directors and
+# heads, and a few others seen (MBSE, robotics integration, product design, strike, compliance
+# engineers); and design or documentation roles that carry "Developer". Engineering managers
+# do count.
+EXCLUDED_TECHNICAL_SPECIALTY_PHRASES = (
+    "analytics",
+    "applied scientist",
+    "baremetal",
+    "cloud operations",
+    "compliance engineer",
+    "computer vision",
+    "cybersecurity",
+    "data center",
+    "data engineer",
+    "data engineering",
+    "data pipeline",
+    "data pipelines",
+    "data platform",
+    "data warehouse",
+    "data warehousing",
+    "data science",
+    "data scientist",
+    "datacenters",
+    "deep learning",
+    "deployed",
+    "designer",
+    "developer advocate",
+    "developer relations",
+    "developer success",
+    "devops",
+    "devrel",
+    "devsecops",
+    "director",
+    "documentation",
+    "engineering expert",
+    "etl",
+    "founding",
+    "gpu",
+    "graduate",
+    "graduates",
+    "head of",
+    "inference",
+    "infra",
+    "infosec",
+    "infrastructure",
+    "intern",
+    "interns",
+    "internship",
+    "internships",
+    "machine learning",
+    "mbse",
+    "ml",
+    "mlops",
+    "new grad",
+    "new graduate",
+    "new grads",
+    "networking",
+    "observability",
+    "pasante",
+    "pasantia",
+    "platform engineer",
+    "practica",
+    "practicas",
+    "product design",
+    "production engineer",
+    "qa",
+    "quality assurance",
+    "research",
+    "researcher",
+    "robotics integration",
+    "sdet",
+    "security",
+    "site reliability",
+    "sre",
+    "strike",
+    "test automation",
+    "tester",
+    "testing",
+)
+# Frontend only, which I am not a specialist in: discarded unless the title also says full stack.
+FRONTEND_ROLE_PHRASES = (
+    "angular",
+    "front end",
+    "frontend",
+    "next js",
+    "nextjs",
+    "react",
+    "svelte",
+    "ui developer",
+    "ui engineer",
+    "vue",
+)
+FULL_STACK_ROLE_PHRASES = ("full stack", "fullstack")
+# Generic engineering words: technical unless the title names another discipline.
+ENGINEERING_ROLE_PHRASES = (
+    "architect",
+    "engineer",
+    "engineering",
+    "ingeniera",
+    "ingeniero",
+)
+# Disciplines whose engineers do not build software, or roles that only carry the word.
+NON_SOFTWARE_ENGINEERING_PHRASES = (
+    "criticality",
+    "customer success",
+    "electrical",
+    "enablement",
+    "gtm",
+    "hydraulics",
+    "legal",
+    "manufacturing",
+    "mechanical",
+    "mechatronics",
+    "nuclear",
+    "process",
+    "recruiter",
+    "safety",
+    "sales",
+    "solar",
+    "solution engineer",
+    "solutions engineer",
+    "thermal",
+)
+
+
+# Languages an opening may require besides English and Spanish (decision of 2026-11-24): the
+# name shown, then its normalized names (English and its own).
+OTHER_LANGUAGES = (
+    ("Arabic", ("arabic",)),
+    ("Catalan", ("catalan", "catala")),
+    ("Chinese", ("chinese", "mandarin", "cantonese")),
+    ("Czech", ("czech",)),
+    ("Danish", ("danish", "dansk")),
+    ("Dutch", ("dutch", "nederlands")),
+    ("Finnish", ("finnish", "suomi")),
+    ("French", ("french", "francais")),
+    ("German", ("german", "deutsch")),
+    ("Greek", ("greek",)),
+    ("Hebrew", ("hebrew",)),
+    ("Hindi", ("hindi",)),
+    ("Hungarian", ("hungarian",)),
+    ("Indonesian", ("indonesian", "bahasa")),
+    ("Italian", ("italian", "italiano")),
+    ("Japanese", ("japanese",)),
+    ("Korean", ("korean",)),
+    ("Norwegian", ("norwegian", "norsk")),
+    ("Polish", ("polish", "polski")),
+    ("Portuguese", ("portuguese", "portugues")),
+    ("Romanian", ("romanian",)),
+    ("Russian", ("russian",)),
+    ("Swedish", ("swedish", "svenska")),
+    ("Thai", ("thai",)),
+    ("Turkish", ("turkish",)),
+    ("Ukrainian", ("ukrainian",)),
+    ("Vietnamese", ("vietnamese",)),
+)
+# In a title, this word asks for several languages.
+MULTILINGUAL_LANGUAGE = "Multilingual"
+MULTILINGUAL_WORDS = ("multilingual",)
+# Words that make a sentence naming a language a requirement ("Fluent in German").
+LANGUAGE_REQUIREMENT_WORDS = (
+    "b2",
+    "bilingual",
+    "c1",
+    "c2",
+    "fliessend",
+    "fluency",
+    "fluent",
+    "fluently",
+    "kenntnisse",
+    "language skills",
+    "mother tongue",
+    "native",
+    "proficiency",
+    "proficient",
+    "speak",
+    "speaker",
+    "speakers",
+    "speaking",
+    "spoken",
+    "written and spoken",
+    "written and verbal",
+)
+# Compound words that require a language by themselves.
+LANGUAGE_REQUIREMENT_COMPOUNDS = {"deutschkenntnisse": "German", "franzosischkenntnisse": "French"}
+# Words that make it optional ("German is a plus").
+OPTIONAL_LANGUAGE_WORDS = (
+    "advantage",
+    "asset",
+    "beneficial",
+    "bonus",
+    "ideally",
+    "nice to have",
+    "plus",
+    "preferred",
+    "wunschenswert",
+)
+# A description is read sentence by sentence: a requirement names the language in its sentence.
+DESCRIPTION_BLOCK_TAGS = ("br", "div", "h1", "h2", "h3", "h4", "li", "p", "tr")
+DESCRIPTION_SENTENCE_SEPARATORS = re.compile(r"[.!?;•\n]+")
+
+
+# Countries where I cannot work without a visa (Italian citizen, resident in Spain): an opening
+# only there is discarded (decision of 2026-11-24).
+COUNTRIES_REQUIRING_WORK_AUTHORIZATION = frozenset({"GB"})
+# Countries where an Italian citizen works without a visa: the EU, the EEA and Switzerland. An
+# opening only elsewhere is discarded when its description says it sponsors no visa.
+COUNTRIES_WITHOUT_WORK_AUTHORIZATION = frozenset(
+    {
+        "AT",
+        "BE",
+        "BG",
+        "CH",
+        "CY",
+        "CZ",
+        "DE",
+        "DK",
+        "EE",
+        "ES",
+        "FI",
+        "FR",
+        "GR",
+        "HR",
+        "HU",
+        "IE",
+        "IS",
+        "IT",
+        "LI",
+        "LT",
+        "LU",
+        "LV",
+        "MT",
+        "NL",
+        "NO",
+        "PL",
+        "PT",
+        "RO",
+        "SE",
+        "SI",
+        "SK",
+    }
+)
+# A sentence about visas or work authorization...
+SPONSORSHIP_WORDS = ("sponsor", "sponsorship", "sponsorships", "visa", "visas")
+# ...that refuses it ("We are unable to provide visa sponsorship", "Not available for this role").
+SPONSORSHIP_REFUSAL_WORDS = (
+    "can t",
+    "cannot",
+    "do not",
+    "does not",
+    "don t",
+    "no",
+    "not",
+    "unable",
+    "will not",
+    "without",
+    "won t",
+)
+# Requirements that leave sponsorship out without naming it.
+WORK_AUTHORIZATION_REQUIREMENTS = (
+    "legally authorized to work",
+    "legally entitled to work",
+    "must be authorized to work",
+    "must be eligible to work",
+    "must have the right to work",
+    "work authorization is required",
+)
+# An opening open from anywhere is not tied to its company's country.
+ANYWHERE_WORDS = ("anywhere", "global", "globally", "worldwide")
+
+
+# Sites that are job boards or aggregators the rules could not tell apart from a startup: their
+# startup is discarded with this reason, and a source reporting them again changes nothing.
+BLACKLIST_DEFAULT_REASON = "Lista negra: bolsa de trabajo"

@@ -63,7 +63,9 @@ def test_default_list_shows_only_startups_with_active_openings_newest_opening_fi
         create_startup("Older opening", "older.com"), OpeningsStatus.ACTIVE, ("Engineer", 20, None)
     )
     set_openings(
-        create_startup("Undated", "undated.com"), OpeningsStatus.ACTIVE, ("Designer", None, None)
+        create_startup("Undated", "undated.com"),
+        OpeningsStatus.ACTIVE,
+        ("Backend Developer", None, None),
     )
     set_openings(
         create_startup("Newest opening", "newest.com"), OpeningsStatus.ACTIVE, ("Engineer", 2, None)

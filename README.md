@@ -68,12 +68,30 @@ Greenhouse or Lever board (new startups are checked automatically, and every wee
 docker compose run --rm web python manage.py verify_openings
 ```
 
+Only the software roles looked for are kept, and only if they require no language besides
+English and Spanish (from their title and description) and are not only in countries where an
+EU citizen needs a visa (the UK always; elsewhere outside the EU when the description says no visa
+is sponsored); the rest is discarded when verifying.
+After changing those keywords in `startups/constants.py`, discard the stored openings that no
+longer match (no requests; openings discarded before come back with `verify_openings --all`):
+
+```bash
+docker compose run --rm web python manage.py prune_openings
+```
+
 Detect the country each startup is established in, from the evidence already stored (website
 address, declared headquarters, where its openings are, country-code domain). It runs after every
 openings check too; locations corrected by hand are kept:
 
 ```bash
 docker compose run --rm web python manage.py detect_locations
+```
+
+Blacklist a site that is not a startup, such as a job board the rules could not detect (also from
+the startup's page): its startup is discarded and never inspected again:
+
+```bash
+docker compose run --rm web python manage.py blacklist_domain https://www.frameworkheroes.com
 ```
 
 If you add platforms to the identity rules, clean up the domains already stored first:
@@ -100,6 +118,8 @@ docker compose run --rm web ruff check .
 - [x] Phase 5 — web UI: list, detail, contacts, analyses, statuses, manual entry, duplicates, runs
 - [x] Phase 5b — active openings verified on the website or job board; clean list and filters
 - [x] Phase 5c — headquarters country and time difference from Madrid, with a filter
+- [x] Phase 5d — only the software roles looked for, without other languages; the rest is
+  discarded
 
 ## License
 

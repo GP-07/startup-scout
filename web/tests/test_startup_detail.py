@@ -12,7 +12,14 @@ from startups.constants import (
     OpeningsStatus,
     StartupStatus,
 )
-from startups.models import Analysis, Contact, JobOpening, Startup, WebsiteInspection
+from startups.models import (
+    Analysis,
+    BlacklistedDomain,
+    Contact,
+    JobOpening,
+    Startup,
+    WebsiteInspection,
+)
 from web.tests.helpers import create_contact, create_startup
 
 
@@ -220,3 +227,16 @@ def test_location_correction_needs_a_known_country(logged_client):
     logged_client.post(reverse("web:startup_location", args=[startup.pk]), {"country": "XX"})
 
     assert Startup.objects.get(pk=startup.pk).location_source == ""
+
+
+def test_a_job_board_is_sent_to_the_blacklist_from_the_detail(logged_client):
+    startup = create_startup("Jobs Board", "jobsboard.com")
+
+    response = logged_client.post(
+        reverse("web:startup_blacklist", args=[startup.pk]), {"reason": ""}
+    )
+
+    assert response.status_code == 302
+    startup = Startup.objects.get(pk=startup.pk)
+    assert startup.status == StartupStatus.DISCARDED
+    assert BlacklistedDomain.objects.filter(domain="jobsboard.com").exists()
