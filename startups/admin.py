@@ -43,10 +43,17 @@ class StartupAdmin(admin.ModelAdmin):
         "website",
         "openings_state",
         "openings_count",
+        "hq_country",
+        "hq_timezone",
         "status",
         "first_seen_at",
     ]
-    list_filter = ["website_inspection__openings_status", "status", "country"]
+    list_filter = [
+        "website_inspection__openings_status",
+        "status",
+        "location_source",
+        "hq_country",
+    ]
     search_fields = ["name", "website", "domains__domain"]
     raw_id_fields = ["possible_duplicate_of"]
     inlines = [StartupDomainInline, JobOpeningInline, ContactInline, WebsiteInspectionInline]
@@ -70,7 +77,16 @@ class StartupAdmin(admin.ModelAdmin):
 
 @admin.register(JobOpening)
 class JobOpeningAdmin(admin.ModelAdmin):
-    list_display = ["title", "startup", "location", "is_remote", "published_at", "origin"]
+    list_display = [
+        "title",
+        "startup",
+        "location",
+        "country",
+        "timezone_name",
+        "is_remote",
+        "published_at",
+        "origin",
+    ]
     list_filter = ["origin", "is_remote"]
     search_fields = ["title", "startup__name", "location"]
     raw_id_fields = ["startup"]

@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from sources.constants import SourceKey
 from startups.constants import ContactStatus, StartupStatus
+from startups.locations import country_choices
 from startups.models import Analysis, Contact
 from web.constants import (
     ANALYSIS_FILTER_CHOICES,
@@ -10,6 +11,7 @@ from web.constants import (
     CONTACT_WITHOUT_CHANNEL_MESSAGE,
     OPENINGS_FILTER_CHOICES,
     ORDER_CHOICES,
+    TIMEZONE_FILTER_CHOICES,
 )
 
 
@@ -26,13 +28,21 @@ class StartupFilterForm(forms.Form):
     source = forms.ChoiceField(
         required=False, label="Fuente", choices=[("", "Todas"), *SourceKey.choices]
     )
-    country = forms.CharField(required=False, label="País", max_length=2)
+    timezone = forms.ChoiceField(
+        required=False, label="Zona horaria", choices=TIMEZONE_FILTER_CHOICES
+    )
+    country = forms.CharField(required=False, label="País (código)", max_length=2)
     contact = forms.ChoiceField(required=False, label="Contacto", choices=CONTACT_FILTER_CHOICES)
     analysis = forms.ChoiceField(required=False, label="Análisis", choices=ANALYSIS_FILTER_CHOICES)
     since = forms.DateField(
         required=False, label="Vista desde", widget=forms.DateInput(attrs={"type": "date"})
     )
     order = forms.ChoiceField(required=False, label="Orden", choices=ORDER_CHOICES)
+
+
+class LocationForm(forms.Form):
+    country = forms.ChoiceField(label="País", choices=country_choices)
+    city = forms.CharField(max_length=255, required=False, label="Ciudad (opcional)")
 
 
 class DiscardForm(forms.Form):

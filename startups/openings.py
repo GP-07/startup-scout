@@ -15,6 +15,7 @@ the post is a lead, the board is the proof.
 """
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import timedelta
 from urllib.parse import urlsplit
@@ -41,6 +42,7 @@ from startups.constants import (
 )
 from startups.domains import normalize_domain
 from startups.exceptions import InvalidWebsiteError, JobBoardError
+from startups.headquarters import detect_location
 from startups.job_boards import JobBoardClient
 from startups.job_listing import (
     extract_openings,
@@ -48,6 +50,7 @@ from startups.job_listing import (
     open_positions_links,
     says_no_openings,
 )
+from startups.locations import closest_place, country_place, resolve_places
 from startups.models import JobOpening, Startup, WebsiteInspection
 from startups.web_pages import html_of, load_robots, site_root
 
@@ -59,6 +62,8 @@ class OpeningsCheck:
     status: str
     url: str = ""
     openings: list = field(default_factory=list)
+    # The location of the office the job board calls headquarters, if it says.
+    headquarters: str = ""
 
 
 class OpeningsVerifier:
@@ -79,19 +84,25 @@ class OpeningsVerifier:
     def verify(self, startup, known_robots=None):
         """Check the startup's openings, replace its `JobOpening`s and return the inspection.
 
+        Then detects again where the startup is established: its openings are evidence.
         `known_robots` maps a site root to its already parsed robots.txt, to avoid reading it
         again right after the website inspection.
         """
         self._robots_by_site = dict(known_robots or {})
         inspection, _ = WebsiteInspection.objects.get_or_create(startup=startup)
+        inspection = self._save(inspection, *self._settle(startup, inspection))
+        detect_location(startup)
+        return inspection
+
+    def _settle(self, startup, inspection):
+        """(check, whether it was checked) for the startup's targets."""
         targets = _targets(startup, inspection)
         if targets:
-            return self._save(inspection, self._check(targets))
+            return self._check(targets), True
         if inspection.has_hiring_signal:
             # A signal with no careers page of its own to read (a jobs@ email, another site).
-            unreadable = OpeningsCheck(OpeningsStatus.UNVERIFIED, url=_web_url_or_blank(inspection))
-            return self._save(inspection, unreadable)
-        return self._save(inspection, OpeningsCheck(OpeningsStatus.NOT_CHECKED), checked=False)
+            return OpeningsCheck(OpeningsStatus.UNVERIFIED, url=_web_url_or_blank(inspection)), True
+        return OpeningsCheck(OpeningsStatus.NOT_CHECKED), False
 
     def _check(self, targets):
         unverified_url = targets[0]
@@ -149,12 +160,15 @@ class OpeningsVerifier:
 
     def _check_board(self, board, checked_url):
         """The board's answer, or None if its API could not be read (the caller falls back)."""
+        board_client = JobBoardClient(self.http_client)
         try:
-            openings = JobBoardClient(self.http_client).fetch_openings(board)
+            openings = board_client.fetch_openings(board)
         except JobBoardError as error:
             logger.info("Could not read job board %s: %s", board, error)
             return None
-        return _check_from(openings, checked_url)
+        return _check_from(
+            openings, checked_url, headquarters=board_client.fetch_headquarters(board)
+        )
 
     def _read_page(self, url):
         """(final URL, HTML, answered OK) of a page robots.txt allows, or None."""
@@ -178,8 +192,9 @@ class OpeningsVerifier:
         return self._robots_by_site[root_url]
 
     @transaction.atomic
-    def _save(self, inspection, check, checked=True):
+    def _save(self, inspection, check, checked):
         inspection.startup.job_openings.all().delete()
+        places = _opening_places(check.openings)
         JobOpening.objects.bulk_create(
             JobOpening(
                 startup=inspection.startup,
@@ -189,13 +204,23 @@ class OpeningsVerifier:
                 url=opening.url,
                 published_at=opening.published_at,
                 origin=opening.origin,
+                country=place.country if place else "",
+                timezone_name=place.timezone_name if place else "",
             )
-            for opening in check.openings
+            for opening, place in zip(check.openings, places, strict=True)
         )
         inspection.openings_status = check.status
         inspection.openings_url = check.url
         inspection.openings_checked_at = timezone.now() if checked else None
-        inspection.save(update_fields=["openings_status", "openings_url", "openings_checked_at"])
+        inspection.headquarters_location = check.headquarters
+        inspection.save(
+            update_fields=[
+                "openings_status",
+                "openings_url",
+                "openings_checked_at",
+                "headquarters_location",
+            ]
+        )
         return inspection
 
 
@@ -239,7 +264,46 @@ def _is_careers_page_of(startup, url):
     return startup.domains.filter(domain=domain).exists()
 
 
-def _check_from(openings, checked_url):
+def _opening_places(openings):
+    """For each opening, the place closest to Madrid of those it names, or None.
+
+    A city whose name several countries share ("San Carlos") goes to the country most of the
+    other openings are in.
+    """
+    now = timezone.now()
+    first_reading = [
+        resolve_places(opening.location, country_hint=opening.country_hint) for opening in openings
+    ]
+    countries = Counter(
+        place.country for places in first_reading for place in set(places) if place.country
+    )
+    preferred_country = _closest_top_country(countries, now)
+    return [
+        closest_place(
+            resolve_places(
+                opening.location,
+                country_hint=opening.country_hint,
+                preferred_country=preferred_country,
+            ),
+            now,
+        )
+        for opening in openings
+    ]
+
+
+def _closest_top_country(countries, now):
+    """The most frequent country; in a tie, the one closest to Madrid. Blank without any."""
+    if not countries:
+        return ""
+    top_count = max(countries.values())
+    tied_places = [
+        country_place(country) for country, count in countries.items() if count == top_count
+    ]
+    place = closest_place([place for place in tied_places if place is not None], now)
+    return place.country if place else ""
+
+
+def _check_from(openings, checked_url, headquarters=""):
     """Active openings: undated ones, or published within OPENINGS_MAX_AGE_DAYS."""
     oldest_active = timezone.now() - timedelta(days=OPENINGS_MAX_AGE_DAYS)
     active_openings = [
@@ -248,7 +312,9 @@ def _check_from(openings, checked_url):
         if opening.published_at is None or opening.published_at >= oldest_active
     ]
     status = OpeningsStatus.ACTIVE if active_openings else OpeningsStatus.NONE
-    return OpeningsCheck(status, url=checked_url, openings=active_openings)
+    return OpeningsCheck(
+        status, url=checked_url, openings=active_openings, headquarters=headquarters
+    )
 
 
 def startups_to_verify(include_checked=False):

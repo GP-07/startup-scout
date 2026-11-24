@@ -7,6 +7,7 @@ from startups.constants import (
     HiringSignalKind,
     HiringSignalMethod,
     InspectionStatus,
+    LocationSource,
     OpeningOrigin,
     OpeningsStatus,
     RemotePolicy,
@@ -37,6 +38,16 @@ class Startup(models.Model):
         related_name="possible_duplicates",
     )
     field_sources = models.JSONField(default=dict, blank=True)
+    # Where it is established (startups/headquarters.py): blank while unknown. The zone is the
+    # city's when known, else the capital's; it gives the time difference from Madrid.
+    hq_country = models.CharField(
+        max_length=2, blank=True, db_index=True, help_text="ISO 3166-1 alpha-2"
+    )
+    hq_city = models.CharField(max_length=255, blank=True)
+    hq_timezone = models.CharField(max_length=64, blank=True, db_index=True, help_text="IANA")
+    location_source = models.CharField(max_length=20, choices=LocationSource.choices, blank=True)
+    location_evidence = models.CharField(max_length=500, blank=True)
+    location_detected_at = models.DateTimeField(null=True, blank=True)
     first_seen_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -152,6 +163,10 @@ class WebsiteInspection(models.Model):
     )
     openings_checked_at = models.DateTimeField(null=True, blank=True)
     openings_url = models.URLField(max_length=500, blank=True)
+    # Where the company says it is: the schema.org address on its home page, and the office its
+    # job board calls headquarters. Evidence for its location (startups/headquarters.py).
+    organization_location = models.CharField(max_length=255, blank=True)
+    headquarters_location = models.CharField(max_length=255, blank=True)
     error = models.TextField(blank=True)
 
     def __str__(self):
@@ -173,6 +188,9 @@ class JobOpening(models.Model):
     # When the website or the job board published it. Null if they do not say.
     published_at = models.DateTimeField(null=True, blank=True)
     origin = models.CharField(max_length=20, choices=OpeningOrigin.choices)
+    # Where it is, of the places its location names, the closest to Madrid. Blank if unknown.
+    country = models.CharField(max_length=2, blank=True, help_text="ISO 3166-1 alpha-2")
+    timezone_name = models.CharField(max_length=64, blank=True, db_index=True, help_text="IANA")
 
     class Meta:
         ordering = [models.F("published_at").desc(nulls_last=True), "title"]

@@ -31,6 +31,21 @@ ANALYSIS_FILTER_CHOICES = [
     (ANALYSIS_FILTER_DRAFT, "Solo borradores"),
     (ANALYSIS_FILTER_SENT, "Enviado"),
 ]
+# Time difference from Madrid (startups/locations.py). Unknown countries are kept in the "near"
+# options so that no startup is lost for lack of data.
+TIMEZONE_FILTER_NEAR = "near"
+TIMEZONE_FILTER_NEAR_OR_OPENING = "near_or_opening"
+TIMEZONE_FILTER_FAR = "far"
+TIMEZONE_FILTER_UNKNOWN = "unknown"
+TIMEZONE_FILTER_CHOICES = [
+    ("", "Todas"),
+    (TIMEZONE_FILTER_NEAR, "Sede a menos de 5 h de Madrid (incluye país desconocido)"),
+    (TIMEZONE_FILTER_NEAR_OR_OPENING, "Sede o algún puesto a menos de 5 h (incluye desconocido)"),
+    (TIMEZONE_FILTER_FAR, "Sede a 5 h o más"),
+    (TIMEZONE_FILTER_UNKNOWN, "País desconocido (sin contar remotos)"),
+]
+HOURS_DECIMAL_SEPARATOR = ","
+MINUS_SIGN = "−"
 ORDER_PRIORITY = ""
 ORDER_NEWEST = "newest"
 ORDER_MOST_OPENINGS = "most_openings"
@@ -54,6 +69,7 @@ MARKDOWN_EXTENSIONS = ["extra", "sane_lists"]
 INVALID_WEBSITE_MESSAGE = "La URL no tiene un dominio válido."
 MISSING_DISCARD_REASON_MESSAGE = "Para descartar hace falta un motivo."
 CONTACT_WITHOUT_CHANNEL_MESSAGE = "Cargá al menos un mail o un perfil."
+UNKNOWN_COUNTRY_MESSAGE = "Elegí un país de la lista."
 # Contacts in a startup: confirmed first, rejected last; within each, the strongest role first.
 CONTACT_STATUS_ORDER = (ContactStatus.CONFIRMED, ContactStatus.CANDIDATE, ContactStatus.REJECTED)
 HTMX_SCRIPT_URL = "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"

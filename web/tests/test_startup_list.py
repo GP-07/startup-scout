@@ -9,6 +9,7 @@ from startups.constants import (
     ContactRole,
     ContactStatus,
     InspectionStatus,
+    LocationSource,
     OpeningOrigin,
     OpeningsStatus,
     StartupStatus,
@@ -163,7 +164,7 @@ def test_discarded_startups_are_hidden_unless_filtered(logged_client):
     ],
 )
 def test_text_source_and_country_filters(logged_client, params, expected):
-    create_startup("Acme", "acme.com", description="Robots for warehouses", country="ES")
+    create_startup("Acme", "acme.com", description="Robots for warehouses", hq_country="ES")
     create_startup("Beta", "beta.io", source_key=SourceKey.MANUAL)
 
     assert listed_names(logged_client.get(LIST_URL, {**ALL, **params})) == expected
@@ -215,3 +216,82 @@ def test_quick_discard_needs_a_reason_and_returns_the_row(logged_client):
     startup.refresh_from_db()
     assert startup.status == StartupStatus.DISCARDED
     assert b"Agency" in accepted.content
+
+
+def create_located(name, hq_timezone, *opening_timezones, location_source=""):
+    startup = create_startup(
+        name,
+        f"{name.lower()}.com",
+        hq_country="XX" if hq_timezone and not location_source else "",
+        hq_timezone=hq_timezone,
+        location_source=location_source,
+    )
+    for timezone_name in opening_timezones:
+        JobOpening.objects.create(
+            startup=startup,
+            title="Engineer",
+            origin=OpeningOrigin.WEBSITE,
+            timezone_name=timezone_name,
+        )
+    return startup
+
+
+@pytest.mark.parametrize(
+    ("timezone_filter", "expected"),
+    [
+        (
+            "",
+            [
+                "Berlin",
+                "Lisbon",
+                "NewYork",
+                "NewYorkHiringInLondon",
+                "Remote",
+                "RemoteAmericas",
+                "RemoteEmea",
+                "Unknown",
+            ],
+        ),
+        ("near", ["Berlin", "Lisbon", "Remote", "RemoteEmea", "Unknown"]),
+        (
+            "near_or_opening",
+            ["Berlin", "Lisbon", "NewYorkHiringInLondon", "Remote", "RemoteEmea", "Unknown"],
+        ),
+        ("far", ["NewYork", "NewYorkHiringInLondon", "RemoteAmericas"]),
+        ("unknown", ["Unknown"]),
+    ],
+)
+def test_timezone_filter_measures_the_difference_from_madrid(
+    logged_client, timezone_filter, expected
+):
+    create_located("Berlin", "Europe/Berlin")
+    create_located("Lisbon", "Europe/Lisbon", "America/Los_Angeles")
+    create_located("NewYork", "America/New_York", "America/Chicago")
+    create_located("NewYorkHiringInLondon", "America/New_York", "Europe/London", "Europe/London")
+    create_located("Unknown", "")
+    create_located("Remote", "", location_source=LocationSource.REMOTE)
+    create_located("RemoteEmea", "Europe/Paris", location_source=LocationSource.REMOTE)
+    create_located("RemoteAmericas", "America/Chicago", location_source=LocationSource.REMOTE)
+
+    assert sorted_names(logged_client, {"timezone": timezone_filter}) == expected
+
+
+def test_rows_show_the_country_its_time_difference_and_near_openings(logged_client):
+    startup = create_startup("Acme", "acme.com", hq_country="GB", hq_timezone="Europe/London")
+    set_openings(startup, OpeningsStatus.ACTIVE)
+    JobOpening.objects.create(
+        startup=startup,
+        title="Backend Engineer",
+        origin=OpeningOrigin.WEBSITE,
+        country="DE",
+        timezone_name="Europe/Berlin",
+    )
+    create_startup("Beta", "beta.com")
+    create_startup("Gamma", "gamma.com", location_source=LocationSource.REMOTE)
+
+    content = logged_client.get(LIST_URL, ALL).content.decode()
+
+    assert "GB · −1 h" in content
+    assert "DE · &lt;5 h" in content
+    assert "País desconocido" in content
+    assert "Remoto · &lt;5 h" in content

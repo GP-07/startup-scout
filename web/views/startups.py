@@ -5,7 +5,12 @@ from django.views.decorators.http import require_POST
 
 from sources.constants import SourceKey
 from sources.manual_entry import add_startup_manually
-from startups.exceptions import DiscardReasonRequiredError, InvalidWebsiteError
+from startups.exceptions import (
+    DiscardReasonRequiredError,
+    InvalidWebsiteError,
+    UnknownCountryError,
+)
+from startups.headquarters import correct_location, reset_location
 from startups.models import Startup
 from startups.status import change_status, discard_startup
 from web.constants import (
@@ -14,12 +19,14 @@ from web.constants import (
     MISSING_DISCARD_REASON_MESSAGE,
     OPENINGS_FILTER_DEFAULT,
     STARTUPS_PER_PAGE,
+    UNKNOWN_COUNTRY_MESSAGE,
 )
 from web.filters import filter_startups, startup_list_queryset
 from web.forms import (
     AnalysisForm,
     ContactForm,
     DiscardForm,
+    LocationForm,
     ManualEntryForm,
     StartupFilterForm,
     StatusForm,
@@ -77,6 +84,9 @@ def startup_detail(request, pk):
         "inspection": getattr(startup, "website_inspection", None),
         "openings": startup.job_openings.all(),
         "status_form": StatusForm(initial={"status": startup.status}),
+        "location_form": LocationForm(
+            initial={"country": startup.hq_country, "city": startup.hq_city}
+        ),
         "status_changes": startup.status_changes.all(),
         "possible_duplicates": startup.possible_duplicates.all(),
         "analysis_form": AnalysisForm(),
@@ -95,6 +105,28 @@ def startup_status(request, pk):
             change_status(startup, form.cleaned_data["status"], note=form.cleaned_data["note"])
         except DiscardReasonRequiredError:
             messages.error(request, MISSING_DISCARD_REASON_MESSAGE)
+    return redirect("web:startup_detail", pk=startup.pk)
+
+
+@require_POST
+def startup_location(request, pk):
+    """Correct by hand where the startup is established: detection never overwrites it."""
+    startup = get_object_or_404(Startup, pk=pk)
+    form = LocationForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, UNKNOWN_COUNTRY_MESSAGE)
+        return redirect("web:startup_detail", pk=startup.pk)
+    try:
+        correct_location(startup, form.cleaned_data["country"], city=form.cleaned_data["city"])
+    except UnknownCountryError:
+        messages.error(request, UNKNOWN_COUNTRY_MESSAGE)
+    return redirect("web:startup_detail", pk=startup.pk)
+
+
+@require_POST
+def startup_location_reset(request, pk):
+    startup = get_object_or_404(Startup, pk=pk)
+    reset_location(startup)
     return redirect("web:startup_detail", pk=startup.pk)
 
 

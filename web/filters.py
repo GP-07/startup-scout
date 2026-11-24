@@ -1,8 +1,10 @@
 """The startup list: filters from the form and the order in which I review them."""
 
 from django.db.models import Exists, F, OuterRef, Prefetch, Q
+from django.utils import timezone
 
-from startups.constants import OpeningsStatus, StartupStatus
+from startups.constants import LocationSource, OpeningsStatus, StartupStatus
+from startups.locations import timezones_near_reference
 from startups.models import JobOpening, Startup
 from startups.querysets import true_when
 from web.constants import (
@@ -15,6 +17,10 @@ from web.constants import (
     OPENINGS_FILTER_ALL,
     ORDER_MOST_OPENINGS,
     ORDER_NEWEST,
+    TIMEZONE_FILTER_FAR,
+    TIMEZONE_FILTER_NEAR,
+    TIMEZONE_FILTER_NEAR_OR_OPENING,
+    TIMEZONE_FILTER_UNKNOWN,
 )
 
 
@@ -37,6 +43,7 @@ def filter_startups(queryset, filters):
     queryset = _filter_text(queryset, filters)
     queryset = _filter_contact(queryset, filters.get("contact"))
     queryset = _filter_analysis(queryset, filters.get("analysis"))
+    queryset = _filter_timezone(queryset, filters.get("timezone"))
     status = filters.get("status")
     if status:
         queryset = queryset.filter(status=status)
@@ -45,7 +52,7 @@ def filter_startups(queryset, filters):
     if filters.get("source"):
         queryset = queryset.filter(source_records__source__key=filters["source"]).distinct()
     if filters.get("country"):
-        queryset = queryset.filter(country__iexact=filters["country"])
+        queryset = queryset.filter(hq_country__iexact=filters["country"])
     if filters.get("since"):
         queryset = queryset.filter(first_seen_at__date__gte=filters["since"])
     return _order(queryset, filters.get("order"))
@@ -95,6 +102,44 @@ def _filter_analysis(queryset, analysis):
     if analysis == ANALYSIS_FILTER_SENT:
         return queryset.filter(has_sent_analysis=True)
     return queryset
+
+
+def _filter_timezone(queryset, option):
+    """By the time difference from Madrid today, daylight saving time included.
+
+    The zones stored are few: those less than 5 hours away are worked out in Python and the
+    database filters by that list. A blank zone is near: the country is unknown, or the openings
+    are only "Remote".
+    """
+    if not option:
+        return queryset
+    unknown = Q(hq_timezone="")
+    if option == TIMEZONE_FILTER_UNKNOWN:
+        return queryset.filter(unknown).exclude(location_source=LocationSource.REMOTE)
+    near_zones = _near_timezones()
+    near_headquarters = Q(hq_timezone__in=near_zones)
+    if option == TIMEZONE_FILTER_FAR:
+        return queryset.exclude(unknown).exclude(near_headquarters)
+    if option == TIMEZONE_FILTER_NEAR:
+        return queryset.filter(near_headquarters | unknown)
+    if option == TIMEZONE_FILTER_NEAR_OR_OPENING:
+        near_opening = JobOpening.objects.filter(
+            startup=OuterRef("pk"), timezone_name__in=near_zones
+        )
+        return queryset.filter(near_headquarters | unknown | Q(Exists(near_opening)))
+    return queryset
+
+
+def _near_timezones():
+    stored_zones = set(
+        Startup.objects.exclude(hq_timezone="").values_list("hq_timezone", flat=True).distinct()
+    )
+    stored_zones.update(
+        JobOpening.objects.exclude(timezone_name="")
+        .values_list("timezone_name", flat=True)
+        .distinct()
+    )
+    return timezones_near_reference(sorted(stored_zones), timezone.now())
 
 
 def _order(queryset, order):

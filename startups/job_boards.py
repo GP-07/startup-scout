@@ -14,6 +14,7 @@ import httpx
 from startups.constants import (
     ASHBY_API_URL,
     GREENHOUSE_API_URL,
+    GREENHOUSE_OFFICES_API_URL,
     HTTP_NOT_FOUND,
     JOB_LOCATION_MAX_LENGTH,
     JOB_TITLE_MAX_LENGTH,
@@ -32,6 +33,7 @@ from startups.job_listing import (
     is_remote_text,
     parse_publication_date,
 )
+from startups.locations import names_headquarters
 
 
 class JobBoardClient:
@@ -51,6 +53,22 @@ class JobBoardClient:
         openings = readers[board.provider](board.slug)
         return [opening for opening in openings if not is_generic_application(opening.title)]
 
+    def fetch_headquarters(self, board):
+        """The location of the office the board calls headquarters, or blank.
+
+        Only Greenhouse lists offices; a board that cannot be read gives blank too.
+        """
+        if board.provider != JobBoardProvider.GREENHOUSE:
+            return ""
+        try:
+            body = self._get_json(GREENHOUSE_OFFICES_API_URL.format(slug=board.slug))
+        except JobBoardError:
+            return ""
+        for office in body.get("offices") or []:
+            if names_headquarters(office.get("name")) and office.get("location"):
+                return _clean(office["location"], JOB_LOCATION_MAX_LENGTH)
+        return ""
+
     def _ashby_openings(self, slug):
         body = self._get_json(ASHBY_API_URL.format(slug=slug))
         return [
@@ -61,6 +79,7 @@ class JobBoardClient:
                 url=job.get("jobUrl") or "",
                 published_at=parse_publication_date(job.get("publishedAt")),
                 origin=OpeningOrigin.ASHBY,
+                country_hint=_ashby_country(job),
             )
             for job in body.get("jobs", [])
             if job.get("isListed", True)
@@ -105,6 +124,7 @@ class JobBoardClient:
                 url=posting.get("hostedUrl") or "",
                 published_at=_from_milliseconds(posting.get("createdAt")),
                 origin=OpeningOrigin.LEVER,
+                country_hint=str(posting.get("country") or ""),
             )
             for posting in body
         ]
@@ -120,6 +140,11 @@ class JobBoardClient:
             return response.json()
         except ValueError as error:
             raise JobBoardError(f"{url}: not JSON") from error
+
+
+def _ashby_country(job):
+    postal_address = (job.get("address") or {}).get("postalAddress") or {}
+    return str(postal_address.get("addressCountry") or "")
 
 
 def _lever_is_remote(posting):

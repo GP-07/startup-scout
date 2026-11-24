@@ -9,6 +9,7 @@ from sources.models import Source, SourceRecord
 from startups.constants import (
     OPENINGS_MAX_AGE_DAYS,
     InspectionStatus,
+    LocationSource,
     OpeningOrigin,
     OpeningsStatus,
 )
@@ -295,3 +296,57 @@ def test_open_positions_link_is_followed_one_step():
 
     assert inspection.openings_status == OpeningsStatus.ACTIVE
     assert inspection.openings_url == "https://acme.com/careers/open-roles"
+
+
+def test_each_opening_gets_the_place_closest_to_madrid_of_those_it_names():
+    startup = create_startup()
+    jobs = ashby_jobs(1, 2, 3)
+    jobs["jobs"][0]["location"] = "New York, San Francisco or London"
+    jobs["jobs"][1]["location"] = "Remote"
+    jobs["jobs"][1]["address"] = {"postalAddress": {"addressCountry": "Germany"}}
+    jobs["jobs"][2]["location"] = "Remote"
+    internet = FakeInternet(
+        pages={CAREERS_URL: ASHBY_CAREERS_PAGE}, api_responses={ASHBY_API_URL: jobs}
+    )
+
+    build_verifier(internet).verify(startup)
+
+    places = {
+        title: (country, timezone_name)
+        for title, country, timezone_name in startup.job_openings.values_list(
+            "title", "country", "timezone_name"
+        )
+    }
+    assert places == {
+        "Engineer 0": ("GB", "Europe/London"),
+        "Engineer 1": ("DE", "Europe/Berlin"),
+        "Engineer 2": ("", ""),
+    }
+
+
+def test_greenhouse_headquarters_is_kept_and_the_location_detected():
+    startup = create_startup(signal_url="https://job-boards.greenhouse.io/acme")
+    internet = FakeInternet(
+        api_responses={
+            GREENHOUSE_API_URL: {
+                "jobs": [
+                    {
+                        "title": "Backend Engineer",
+                        "location": {"name": "Remote"},
+                        "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/1",
+                        "first_published": iso_days_ago(2),
+                    }
+                ]
+            },
+            "https://boards-api.greenhouse.io/v1/boards/acme/offices": {
+                "offices": [{"name": "Headquarters", "location": "Lisbon, Portugal"}]
+            },
+        }
+    )
+
+    inspection = build_verifier(internet).verify(startup)
+
+    startup.refresh_from_db()
+    assert inspection.headquarters_location == "Lisbon, Portugal"
+    assert startup.hq_country == "PT"
+    assert startup.location_source == LocationSource.HEADQUARTERS

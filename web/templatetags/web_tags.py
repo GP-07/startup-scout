@@ -1,9 +1,17 @@
 import markdown as markdown_library
 import nh3
 from django import template
+from django.utils import timezone
 from django.utils.safestring import mark_safe
 
-from web.constants import HTMX_SCRIPT_URL, MARKDOWN_EXTENSIONS, OPENINGS_PER_ROW
+from startups import locations
+from web.constants import (
+    HOURS_DECIMAL_SEPARATOR,
+    HTMX_SCRIPT_URL,
+    MARKDOWN_EXTENSIONS,
+    MINUS_SIGN,
+    OPENINGS_PER_ROW,
+)
 
 register = template.Library()
 
@@ -26,6 +34,27 @@ def source_names(startup):
 def first_openings(startup):
     """The first active openings of a listed startup (prefetched as `openings`)."""
     return startup.openings[:OPENINGS_PER_ROW]
+
+
+@register.filter
+def hours_from_madrid(timezone_name):
+    """The zone's difference from Madrid today: "0 h", "−6 h", "+4,5 h"; blank if unknown."""
+    hours = locations.hours_from_reference(timezone_name, timezone.now())
+    if hours is None:
+        return ""
+    number = f"{abs(hours):g}".replace(".", HOURS_DECIMAL_SEPARATOR)
+    sign = "" if hours == 0 else ("+" if hours > 0 else MINUS_SIGN)
+    return f"{sign}{number} h"
+
+
+@register.filter
+def is_near_madrid(timezone_name):
+    return locations.is_near_reference(timezone_name, timezone.now())
+
+
+@register.filter
+def country_name(code):
+    return locations.country_name(code)
 
 
 @register.simple_tag

@@ -31,3 +31,11 @@ class ForeignContactError(ValueError):
 
 class JobBoardError(Exception):
     """A job board API could not be read: the board does not exist or the API failed."""
+
+
+class UnknownCountryError(ValueError):
+    """A location can only be corrected to a country known by its ISO code."""
+
+    def __init__(self, country):
+        self.country = country
+        super().__init__(f"'{country}' is not a known country code")

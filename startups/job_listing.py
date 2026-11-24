@@ -50,6 +50,8 @@ class OpeningCandidate:
     url: str
     published_at: datetime | None
     origin: str
+    # The country the source states apart from the location text: a name or an ISO code.
+    country_hint: str = ""
 
 
 @dataclass(frozen=True)
@@ -214,6 +216,7 @@ def _json_ld_openings(soup, page_url):
                     url=str(posting.get("url") or page_url),
                     published_at=parse_publication_date(posting.get("datePosted")),
                     origin=OpeningOrigin.WEBSITE,
+                    country_hint=_json_ld_country(posting),
                 )
             )
     return openings
@@ -245,6 +248,19 @@ def _json_ld_location(posting):
             parts = [address.get("addressLocality"), address.get("addressCountry")]
             names.append(", ".join(str(part) for part in parts if isinstance(part, str) and part))
     return "; ".join(name for name in names if name)
+
+
+def _json_ld_country(posting):
+    """The first `addressCountry` of the posting: a name or code, or a `Country` with one."""
+    locations = posting.get("jobLocation")
+    for location in locations if isinstance(locations, list) else [locations]:
+        address = location.get("address") if isinstance(location, dict) else None
+        country = address.get("addressCountry") if isinstance(address, dict) else None
+        if isinstance(country, dict):
+            country = country.get("name")
+        if isinstance(country, str) and country.strip():
+            return country.strip()
+    return ""
 
 
 def _json_ld_is_remote(posting):

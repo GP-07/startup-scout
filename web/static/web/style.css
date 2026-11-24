@@ -68,3 +68,5 @@ button.danger { color: var(--danger); }
 .markdown { margin: 0.5rem 0; }
 ul.plain { list-style: none; padding: 0; }
 .pagination { display: flex; gap: 1rem; margin-top: 1rem; }
+.near { color: var(--hiring); font-weight: 600; }
+td.location { white-space: nowrap; }

@@ -2,14 +2,14 @@
 <table class="startups">
   <thead>
     <tr>
-      <th>Startup</th><th>Búsquedas</th><th>Estado</th><th>Fuentes</th><th>Contacto</th><th>Vista</th><th>Descartar</th>
+      <th>Startup</th><th>País</th><th>Búsquedas</th><th>Estado</th><th>Fuentes</th><th>Contacto</th><th>Vista</th><th>Descartar</th>
     </tr>
   </thead>
   <tbody>
     {% for startup in page_obj %}
       {% include "web/partials/startup_row.html" %}
     {% empty %}
-      <tr><td colspan="7">No hay startups con estos filtros.</td></tr>
+      <tr><td colspan="8">No hay startups con estos filtros.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -7,11 +7,12 @@ from startups.constants import (
     ContactRole,
     ContactStatus,
     InspectionStatus,
+    LocationSource,
     OpeningOrigin,
     OpeningsStatus,
     StartupStatus,
 )
-from startups.models import Analysis, Contact, JobOpening, WebsiteInspection
+from startups.models import Analysis, Contact, JobOpening, Startup, WebsiteInspection
 from web.tests.helpers import create_contact, create_startup
 
 
@@ -170,3 +171,52 @@ def test_detail_lists_the_active_openings(logged_client):
     assert "Backend Engineer" in content
     assert "https://acme.com/careers/backend" in content
     assert "sin fecha" in content
+
+
+def test_detail_shows_the_location_and_its_evidence(logged_client):
+    startup = create_startup(
+        "Acme",
+        "acme.com",
+        hq_country="DE",
+        hq_city="Berlin",
+        hq_timezone="Europe/Berlin",
+        location_source=LocationSource.WORKPLACES,
+        location_evidence="Berlin; Munich",
+    )
+
+    content = logged_client.get(detail_url(startup)).content.decode()
+
+    assert "Germany" in content
+    assert "Berlin" in content
+    assert "Europe/Berlin" in content
+    assert "0 h de Madrid" in content
+    assert "Lugares de sus puestos" in content
+    assert "Berlin; Munich" in content
+
+
+def test_location_is_corrected_by_hand_and_reset_to_detection(logged_client):
+    startup = create_startup("Acme", "acme.de")
+
+    response = logged_client.post(
+        reverse("web:startup_location", args=[startup.pk]), {"country": "AR", "city": "Rosario"}
+    )
+
+    assert response.status_code == 302
+    startup = Startup.objects.get(pk=startup.pk)
+    assert startup.hq_country == "AR"
+    assert startup.hq_timezone == "America/Argentina/Cordoba"
+    assert startup.location_source == LocationSource.MANUAL
+
+    logged_client.post(reverse("web:startup_location_reset", args=[startup.pk]))
+
+    startup = Startup.objects.get(pk=startup.pk)
+    assert startup.hq_country == "DE"
+    assert startup.location_source == LocationSource.COUNTRY_DOMAIN
+
+
+def test_location_correction_needs_a_known_country(logged_client):
+    startup = create_startup("Acme", "acme.com")
+
+    logged_client.post(reverse("web:startup_location", args=[startup.pk]), {"country": "XX"})
+
+    assert Startup.objects.get(pk=startup.pk).location_source == ""

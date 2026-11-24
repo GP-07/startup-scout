@@ -5,12 +5,21 @@
     {% if startup.website %}<br><a class="muted" href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website|truncatechars:50 }}</a>{% endif %}
     {% if startup.description %}<br><span class="muted">{{ startup.description|truncatechars:110 }}</span>{% endif %}
   </td>
+  <td class="location">
+    {% if startup.hq_country %}
+      <span title="{{ startup.hq_city|default:startup.hq_country }} · {{ startup.get_location_source_display }}">{{ startup.hq_country }}{% if startup.hq_timezone %} · {{ startup.hq_timezone|hours_from_madrid }}{% endif %}</span>
+    {% elif startup.location_source == 'remote' %}
+      <span title="{{ startup.get_location_source_display }}">Remoto · {% if startup.hq_timezone %}{{ startup.hq_timezone|hours_from_madrid }}{% else %}&lt;5 h{% endif %}</span>
+    {% else %}
+      <span class="muted">País desconocido</span>
+    {% endif %}
+  </td>
   <td>
     {% if startup.openings_state == 'active' %}
       <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }}</span>
       <ul class="openings">
         {% for opening in startup|first_openings %}
-          <li>{{ opening.title|truncatechars:60 }}{% if opening.is_remote %} · <em>remoto</em>{% endif %}</li>
+          <li>{{ opening.title|truncatechars:60 }}{% if opening.is_remote %} · <em>remoto</em>{% endif %}{% if opening.timezone_name|is_near_madrid %} · <span class="near" title="A menos de 5 h de Madrid">{{ opening.country|default:"región" }} · &lt;5 h</span>{% elif opening.country %} · <span class="muted">{{ opening.country }}</span>{% endif %}</li>
         {% endfor %}
       </ul>
     {% elif startup.openings_state == 'unverified' %}

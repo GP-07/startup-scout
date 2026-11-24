@@ -120,3 +120,50 @@ def test_unknown_board_raises_job_board_error():
 
     with pytest.raises(JobBoardError):
         client.fetch_openings(JobBoard(JobBoardProvider.ASHBY, "missing"))
+
+
+def test_ashby_and_lever_give_the_country_of_each_opening():
+    ashby_job = {
+        **ASHBY_RESPONSE["jobs"][0],
+        "address": {"postalAddress": {"addressCountry": "United Kingdom"}},
+    }
+    lever_posting = {**LEVER_RESPONSE[0], "country": "DE"}
+    client, _ = build_client(
+        {
+            "https://api.ashbyhq.com/posting-api/job-board/acme": {"jobs": [ashby_job]},
+            "https://api.lever.co/v0/postings/acme": [lever_posting],
+        }
+    )
+
+    [ashby_opening] = client.fetch_openings(JobBoard(JobBoardProvider.ASHBY, "acme"))
+    [lever_opening] = client.fetch_openings(JobBoard(JobBoardProvider.LEVER, "acme"))
+
+    assert ashby_opening.country_hint == "United Kingdom"
+    assert lever_opening.country_hint == "DE"
+
+
+def test_greenhouse_headquarters_is_the_office_named_so():
+    client, _ = build_client(
+        {
+            "https://boards-api.greenhouse.io/v1/boards/acme/offices": {
+                "offices": [
+                    {"name": "Any location", "location": None},
+                    {"name": "Headquarters", "location": "Santa Clara, California, United States"},
+                ]
+            }
+        }
+    )
+
+    headquarters = client.fetch_headquarters(JobBoard(JobBoardProvider.GREENHOUSE, "acme"))
+
+    assert headquarters == "Santa Clara, California, United States"
+
+
+def test_headquarters_is_blank_for_other_boards_or_without_such_office():
+    client, apis = build_client(
+        {"https://boards-api.greenhouse.io/v1/boards/acme/offices": {"offices": []}}
+    )
+
+    assert client.fetch_headquarters(JobBoard(JobBoardProvider.GREENHOUSE, "acme")) == ""
+    assert client.fetch_headquarters(JobBoard(JobBoardProvider.ASHBY, "acme")) == ""
+    assert apis.requested_urls == ["https://boards-api.greenhouse.io/v1/boards/acme/offices"]

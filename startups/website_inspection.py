@@ -43,6 +43,7 @@ from startups.hiring_signal import (
 )
 from startups.models import WebsiteInspection
 from startups.openings import OpeningsVerifier
+from startups.organization_address import organization_location
 from startups.page_metrics import measure_page
 from startups.web_pages import html_of, load_robots, site_root
 
@@ -130,6 +131,7 @@ class WebsiteInspectionService:
             method=method,
             home_metrics=measure_page(home_html),
             contacts_found=contacts_found,
+            organization_location=organization_location(home_html),
         )
 
     def _get_website_page(self, startup, domain, robots):
@@ -197,6 +199,7 @@ class WebsiteInspectionService:
         error="",
         home_metrics=None,
         contacts_found=0,
+        organization_location="",
     ):
         inspection.status = status
         inspection.inspected_at = timezone.now()
@@ -211,6 +214,7 @@ class WebsiteInspectionService:
         inspection.home_link_count = home_metrics.link_count if home_metrics else None
         inspection.home_has_app_root = home_metrics.has_app_root if home_metrics else None
         inspection.contacts_found = contacts_found
+        inspection.organization_location = organization_location
         inspection.error = error
         inspection.save()
         return inspection

@@ -10,6 +10,12 @@ urlpatterns = [
     path("startups/<int:pk>/", startups.startup_detail, name="startup_detail"),
     path("startups/<int:pk>/discard/", startups.startup_discard, name="startup_discard"),
     path("startups/<int:pk>/status/", startups.startup_status, name="startup_status"),
+    path("startups/<int:pk>/location/", startups.startup_location, name="startup_location"),
+    path(
+        "startups/<int:pk>/location/reset/",
+        startups.startup_location_reset,
+        name="startup_location_reset",
+    ),
     path("startups/<int:pk>/contacts/", contacts.contact_create, name="contact_create"),
     path("contacts/<int:pk>/review/", contacts.contact_review, name="contact_review"),
     path("startups/<int:pk>/analyses/new/", analyses.analysis_create, name="analysis_create"),

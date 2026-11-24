@@ -68,6 +68,14 @@ Greenhouse or Lever board (new startups are checked automatically, and every wee
 docker compose run --rm web python manage.py verify_openings
 ```
 
+Detect the country each startup is established in, from the evidence already stored (website
+address, declared headquarters, where its openings are, country-code domain). It runs after every
+openings check too; locations corrected by hand are kept:
+
+```bash
+docker compose run --rm web python manage.py detect_locations
+```
+
 If you add platforms to the identity rules, clean up the domains already stored first:
 
 ```bash
@@ -91,7 +99,12 @@ docker compose run --rm web ruff check .
 - [x] Phase 4 — contacts from the startup's own website and Hacker News authors
 - [x] Phase 5 — web UI: list, detail, contacts, analyses, statuses, manual entry, duplicates, runs
 - [x] Phase 5b — active openings verified on the website or job board; clean list and filters
+- [x] Phase 5c — headquarters country and time difference from Madrid, with a filter
 
 ## License
 
 MIT
+
+Place data (countries, US states, cities and their time zones) comes from
+[GeoNames](https://www.geonames.org/) through the `geonamescache` package, under the
+[Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/).

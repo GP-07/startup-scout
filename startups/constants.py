@@ -663,3 +663,190 @@ NO_OPENINGS_PHRASES = (
 REMOTE_WORDS = ("remote", "remoto", "remota", "anywhere", "telecommute")
 JSON_LD_JOB_POSTING_TYPE = "JobPosting"
 JSON_LD_REMOTE_LOCATION_TYPE = "TELECOMMUTE"
+
+
+# Where a startup is established, to filter by time difference (docs/startup-scout-design.md §3).
+class LocationSource(models.TextChoices):
+    """Where the headquarters country comes from, by decreasing priority."""
+
+    MANUAL = "manual", "Corregido a mano"
+    WEBSITE_ADDRESS = "website_address", "Dirección en su web"
+    HEADQUARTERS = "headquarters", "Sede declarada"
+    WORKPLACES = "workplaces", "Lugares de sus puestos"
+    COUNTRY_DOMAIN = "country_domain", "Dominio de país"
+    # Openings only "Remote" or in regions ("EMEA"): no country, counted as near Madrid unless
+    # every region named is far (decision of 2026-11-23).
+    REMOTE = "remote", "Remoto o regiones, sin país"
+
+
+# Time differences are measured against this zone, with daylight saving time on both sides.
+REFERENCE_TIMEZONE = "Europe/Madrid"
+MAX_HOURS_FROM_REFERENCE = 5
+SECONDS_PER_HOUR = 3600
+LOCATION_EVIDENCE_MAX_LENGTH = 500
+LOCATION_EVIDENCE_SEPARATOR = "; "
+STARTUP_LOCATION_FIELDS = (
+    "hq_country",
+    "hq_city",
+    "hq_timezone",
+    "location_source",
+    "location_evidence",
+    "location_detected_at",
+)
+# A location text is split into places at these separators; a place's parts at commas
+# ("Vienna, VA, USA": city, state, country).
+LOCATION_SEPARATORS_PATTERN = re.compile(
+    r"[;|/()\[\]{}+&·•:\n]|\s[-–—]\s|\bor\b|\band\b|\bo\b|\by\b", re.IGNORECASE
+)
+LOCATION_PART_SEPARATOR = ","
+# Words around a place that are not part of its name ("San Francisco Office", "Remote (EU)").
+LOCATION_NOISE_WORDS = frozenset(
+    {
+        "almost",
+        "anywhere",
+        "area",
+        "based",
+        "city",
+        "distributed",
+        "fully",
+        "global",
+        "greater",
+        "headquarters",
+        "hours",
+        "hq",
+        "hybrid",
+        "in",
+        "metro",
+        "office",
+        "offices",
+        "on-site",
+        "onsite",
+        "only",
+        "overlap",
+        "preferred",
+        "remote",
+        "remote-first",
+        "surroundings",
+        "time",
+        "timezone",
+        "timezones",
+        "worldwide",
+        "zone",
+        "zones",
+    }
+)
+# Words that are never a place, though a small town carries them as a name or alias.
+NOT_A_PLACE_WORDS = frozenset(
+    {"central", "contract", "field", "north", "rust", "south", "east", "west", "time"}
+)
+# Places named in a location text that declare the headquarters ("San Leandro HQ").
+HEADQUARTERS_WORDS = ("hq", "headquarters", "head office", "sede central")
+# Country names besides GeoNames' own.
+COUNTRY_ALIASES = {
+    "america": "US",
+    "britain": "GB",
+    "czech republic": "CZ",
+    "england": "GB",
+    "great britain": "GB",
+    "holland": "NL",
+    "korea": "KR",
+    "northern ireland": "GB",
+    "scotland": "GB",
+    "the netherlands": "NL",
+    "turkiye": "TR",
+    "uae": "AE",
+    "uk": "GB",
+    "united states of america": "US",
+    "us": "US",
+    "usa": "US",
+    "wales": "GB",
+}
+# Cities known by a short name, as GeoNames calls them.
+CITY_ALIASES = {
+    "kiev": "kyiv",
+    "new york": "new york city",
+    "nyc": "new york city",
+    "san francisco bay": "san francisco",
+    "sf": "san francisco",
+    "sf bay": "san francisco",
+    "silicon valley": "san jose",
+    "washington dc": "washington",
+}
+# Regions and time zones: a zone without a country.
+REGION_TIMEZONES = {
+    "cest": "Europe/Paris",
+    "cet": "Europe/Paris",
+    "central european": "Europe/Paris",
+    "eastern": "America/New_York",
+    "emea": "Europe/Paris",
+    "est": "America/New_York",
+    "et": "America/New_York",
+    "eea": "Europe/Paris",
+    "eu": "Europe/Paris",
+    "europe": "Europe/Paris",
+    "european union": "Europe/Paris",
+    "gmt": "Europe/London",
+    "latam": "America/Sao_Paulo",
+    "latin america": "America/Sao_Paulo",
+    "north america": "America/Chicago",
+    "pacific": "America/Los_Angeles",
+    "pst": "America/Los_Angeles",
+    "pt": "America/Los_Angeles",
+    "utc": "Etc/UTC",
+}
+# "UTC+1", "GMT-5": `Etc/GMT` zones have the opposite sign.
+UTC_OFFSET_PATTERN = re.compile(r"\b(?:utc|gmt)\s*([+-])\s*(\d{1,2})\b", re.IGNORECASE)
+UTC_OFFSET_TIMEZONE = "Etc/GMT{sign}{hours}"
+US_STATE_CODE_LENGTH = 2
+US_STATE_ALIASES = {"dc": "DC", "washington dc": "DC"}
+
+
+class LocationPartKind(models.TextChoices):
+    """What a part of a location text names."""
+
+    REGION = "region"
+    COUNTRY = "country"
+    STATE = "state"
+    CITY = "city"
+
+
+# A "Who is hiring?" post starts with a header line: "Company | Role | Place | ONSITE".
+HIRING_POST_HEADER_END_PATTERN = re.compile(r"<p>|\n", re.IGNORECASE)
+HIRING_POST_HEADER_SEPARATOR = "|"
+HIRING_POST_NOT_A_PLACE_MARKS = ("http", "$", "£", "€", "@")
+# Header segments naming roles, not places ("Software Engineers (backend, mobile)").
+HIRING_POST_ROLE_WORDS = frozenset(
+    {"ceo", "coo", "cto", "engineering", "founder", "founding", "hiring", "role", "roles"}
+)
+# Alternate city names shorter than this are too often common words or abbreviations.
+CITY_ALTERNATE_NAME_MIN_LENGTH = 5
+US_COUNTRY_CODE = "US"
+# Country-code domains that many startups use with no tie to the country.
+GENERIC_COUNTRY_DOMAINS = frozenset(
+    {
+        "ai",
+        "app",
+        "cc",
+        "co",
+        "cx",
+        "fm",
+        "gg",
+        "io",
+        "is",
+        "ly",
+        "me",
+        "sh",
+        "so",
+        "to",
+        "tv",
+        "ws",
+    }
+)
+COUNTRY_DOMAIN_ALIASES = {"uk": "GB"}
+COUNTRY_CODE_LENGTH = 2
+GREENHOUSE_OFFICES_API_URL = "https://boards-api.greenhouse.io/v1/boards/{slug}/offices"
+ORGANIZATION_ADDRESS_FIELDS = ("addressLocality", "addressRegion", "addressCountry")
+# schema.org types whose `address` is the company's.
+JSON_LD_ORGANIZATION_TYPES = frozenset(
+    {"Corporation", "LocalBusiness", "Organization", "ProfessionalService"}
+)

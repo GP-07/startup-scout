@@ -222,6 +222,21 @@ def test_home_metrics_are_stored_to_measure_single_page_app_shells():
     assert inspection.home_has_app_root is False
 
 
+def test_organization_address_on_the_home_is_stored_and_cleared_when_unreadable():
+    home = (
+        "<html><head><script type='application/ld+json'>"
+        '{"@type": "Organization", "address": {"addressLocality": "Porto", '
+        '"addressCountry": "PT"}}</script></head><body>Acme</body></html>'
+    )
+    startup = create_startup()
+
+    inspection = build_service(FakeSite({"/": home})).inspect(startup)
+    assert inspection.organization_location == "Porto, PT"
+
+    inspection = build_service(unreachable_site).inspect(startup)
+    assert inspection.organization_location == ""
+
+
 def test_home_metrics_are_cleared_when_the_home_cannot_be_read():
     startup = create_startup()
     build_service(FakeSite({"/": HOME_WITH_SIGNAL})).inspect(startup)

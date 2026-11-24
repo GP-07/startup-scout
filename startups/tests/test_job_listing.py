@@ -161,3 +161,17 @@ def test_open_positions_links_point_to_where_the_jobs_are():
     )
 
     assert open_positions_links(html, CAREERS_URL) == ["https://www.acme.com/careers/open-roles"]
+
+
+def test_json_ld_job_posting_gives_its_country():
+    page = (
+        "<script type='application/ld+json'>"
+        '{"@type": "JobPosting", "title": "Backend Engineer", "jobLocation": {"address": '
+        '{"addressLocality": "Lyon", "addressCountry": {"@type": "Country", "name": "FR"}}}}'
+        "</script>"
+    )
+
+    [opening] = extract_openings(page, "https://acme.com/careers")
+
+    assert opening.location == "Lyon"
+    assert opening.country_hint == "FR"
