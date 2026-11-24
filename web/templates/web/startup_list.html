@@ -1,15 +1,39 @@
 {% extends "web/base.html" %}
 {% block title %}Startups · startup-scout{% endblock %}
 {% block content %}
-<h1>Startups</h1>
-<form class="filters" method="get" action="{% url 'web:startup_list' %}"
+<div class="page-header">
+  <div>
+    <h1>Startups</h1>
+    <p class="subtitle">Por defecto, las que publican hoy puestos de los que busco, con la búsqueda más reciente primero.</p>
+  </div>
+  <a class="button primary" href="{% url 'web:startup_create' %}">+ Alta manual</a>
+</div>
+<form class="card filters" method="get" action="{% url 'web:startup_list' %}"
       hx-get="{% url 'web:startup_list' %}" hx-target="#results" hx-push-url="true"
       hx-trigger="change, input changed delay:400ms, submit">
-  {% for field in filter_form %}
-    <label>{{ field.label }} {{ field }}</label>
-  {% endfor %}
-  <button type="submit">Filtrar</button>
-  <a href="{% url 'web:startup_list' %}">Limpiar</a>
+  <div class="filter-grid">
+    <label>{{ filter_form.q.label }} {{ filter_form.q }}</label>
+    <label>{{ filter_form.openings.label }} {{ filter_form.openings }}</label>
+    <label>{{ filter_form.timezone.label }} {{ filter_form.timezone }}</label>
+    <label>{{ filter_form.role.label }} {{ filter_form.role }}</label>
+    <label class="check">{{ filter_form.remote }} {{ filter_form.remote.label }}</label>
+  </div>
+  <details{% if filter_form.status.value or filter_form.source.value or filter_form.country.value or filter_form.contact.value or filter_form.analysis.value or filter_form.since.value or filter_form.order.value %} open{% endif %}>
+    <summary>Más filtros</summary>
+    <div class="filter-grid">
+      <label>{{ filter_form.status.label }} {{ filter_form.status }}</label>
+      <label>{{ filter_form.source.label }} {{ filter_form.source }}</label>
+      <label>{{ filter_form.country.label }} {{ filter_form.country }}</label>
+      <label>{{ filter_form.contact.label }} {{ filter_form.contact }}</label>
+      <label>{{ filter_form.analysis.label }} {{ filter_form.analysis }}</label>
+      <label>{{ filter_form.since.label }} {{ filter_form.since }}</label>
+      <label>{{ filter_form.order.label }} {{ filter_form.order }}</label>
+    </div>
+  </details>
+  <div class="filter-actions">
+    <button type="submit" class="primary">Filtrar</button>
+    <a href="{% url 'web:startup_list' %}">Limpiar filtros</a>
+  </div>
 </form>
 <div id="results">
   {% include "web/partials/startup_results.html" %}

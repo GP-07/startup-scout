@@ -1,26 +1,21 @@
-<p class="muted">{{ page_obj.paginator.count }} startups.</p>
-<table class="startups">
-  <thead>
-    <tr>
-      <th>Startup</th><th>País</th><th>Búsquedas</th><th>Estado</th><th>Fuentes</th><th>Contacto</th><th>Vista</th><th>Descartar</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for startup in page_obj %}
-      {% include "web/partials/startup_row.html" %}
-    {% empty %}
-      <tr><td colspan="8">No hay startups con estos filtros.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="results-summary">
+  <span class="muted">{{ page_obj.paginator.count }} startup{{ page_obj.paginator.count|pluralize }}</span>
+</div>
+<div class="startup-list">
+  {% for startup in page_obj %}
+    {% include "web/partials/startup_row.html" %}
+  {% empty %}
+    <div class="card empty-state">No hay startups con estos filtros.</div>
+  {% endfor %}
+</div>
 {% if page_obj.has_other_pages %}
 <nav class="pagination">
   {% if page_obj.has_previous %}
-    <a href="?{{ query_without_page }}&page={{ page_obj.previous_page_number }}" hx-get="?{{ query_without_page }}&page={{ page_obj.previous_page_number }}" hx-target="#results" hx-push-url="true">← Anterior</a>
+    <a class="button" href="?{{ query_without_page }}&page={{ page_obj.previous_page_number }}" hx-get="?{{ query_without_page }}&page={{ page_obj.previous_page_number }}" hx-target="#results" hx-push-url="true">← Anterior</a>
   {% endif %}
-  <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+  <span class="muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
   {% if page_obj.has_next %}
-    <a href="?{{ query_without_page }}&page={{ page_obj.next_page_number }}" hx-get="?{{ query_without_page }}&page={{ page_obj.next_page_number }}" hx-target="#results" hx-push-url="true">Siguiente →</a>
+    <a class="button" href="?{{ query_without_page }}&page={{ page_obj.next_page_number }}" hx-get="?{{ query_without_page }}&page={{ page_obj.next_page_number }}" hx-target="#results" hx-push-url="true">Siguiente →</a>
   {% endif %}
 </nav>
 {% endif %}

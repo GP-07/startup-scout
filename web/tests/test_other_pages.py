@@ -74,3 +74,9 @@ def test_runs_page_lists_the_last_runs_per_source(logged_client):
     content = response.content.decode()
     assert "Hacker News request failed: 503" in content
     assert "HN Who is hiring" in content
+
+
+def test_stylesheet_url_carries_its_version_so_browsers_reload_it(logged_client):
+    content = logged_client.get(reverse("web:run_list")).content.decode()
+
+    assert "web/style.css?v=" in content

@@ -93,3 +93,23 @@ FREE_EMAIL_DOMAINS = frozenset(
         "zoho.com",
     }
 )
+
+
+# What each source brings, and the sources left out with the reason (docs/startup-scout-design.md
+# §2): shown on the rules page.
+SOURCE_DESCRIPTIONS = {
+    SourceKey.HACKER_NEWS: "Show HN y Launch HN por la API pública de Algolia. El autor suele ser"
+    " el founder.",
+    SourceKey.HACKER_NEWS_HIRING: 'Comentarios de primer nivel del hilo mensual "Who is'
+    ' hiring?". El aviso es una pista: la búsqueda se verifica en la web o el tablero.',
+    SourceKey.MANUAL: "Una URL que pego en la web.",
+}
+DISCARDED_SOURCES = (
+    ("EU-Startups", "Todo el dominio está detrás de un challenge de Cloudflare y no hay API."),
+    ("Startupxplore", "Sus términos de uso prohíben reproducir su base de datos."),
+    ("yc-oss/api", "No es oficial: sale del índice de Algolia del sitio de YC."),
+    (
+        "Remotive, RemoteOK, We Work Remotely",
+        "Son bolsas de empleo, no fuentes de startups, y sus APIs ponen condiciones de uso.",
+    ),
+)

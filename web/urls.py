@@ -1,6 +1,6 @@
 from django.urls import path
 
-from web.views import analyses, contacts, duplicates, runs, startups
+from web.views import analyses, contacts, duplicates, rules, runs, startups
 
 app_name = "web"
 
@@ -29,4 +29,5 @@ urlpatterns = [
     path("duplicates/<int:pk>/merge/", duplicates.duplicate_merge, name="duplicate_merge"),
     path("duplicates/<int:pk>/dismiss/", duplicates.duplicate_dismiss, name="duplicate_dismiss"),
     path("runs/", runs.run_list, name="run_list"),
+    path("rules/", rules.rule_list, name="rules"),
 ]

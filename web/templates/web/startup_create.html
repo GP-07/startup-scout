@@ -1,11 +1,15 @@
 {% extends "web/base.html" %}
 {% block title %}Alta manual · startup-scout{% endblock %}
 {% block content %}
-<h1>Alta manual</h1>
-<p class="muted">Pegá la URL de la startup. Si ya estaba cargada, te llevo a su ficha; si es nueva, su web se inspecciona en segundo plano.</p>
-<form method="post" class="stacked">
+<div class="page-header">
+  <div>
+    <h1>Alta manual</h1>
+    <p class="subtitle">Pegá la URL de la startup. Si ya estaba cargada, te llevo a su ficha; si es nueva, su web se inspecciona en segundo plano.</p>
+  </div>
+</div>
+<form method="post" class="card stacked" style="max-width: 36rem">
   {% csrf_token %}
   {{ form.as_div }}
-  <button type="submit">Agregar</button>
+  <div><button type="submit" class="primary">Agregar</button></div>
 </form>
 {% endblock %}

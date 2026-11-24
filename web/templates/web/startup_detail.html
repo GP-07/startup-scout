@@ -2,19 +2,30 @@
 {% load web_tags %}
 {% block title %}{{ startup.name }} · startup-scout{% endblock %}
 {% block content %}
-<p><a href="{% url 'web:startup_list' %}">← Startups</a></p>
-<h1>{{ startup.name }}</h1>
-<p>
-  {% if startup.website %}<a href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website }}</a> · {% endif %}
-  <strong>{{ startup.get_status_display }}</strong>
-  {% if startup.discard_reason %}<span class="muted">({{ startup.discard_reason }})</span>{% endif %}
-  {% if startup.openings_state == 'active' %}
-    · <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }} activa{{ startup.openings_count|pluralize }}</span>
-  {% endif %}
-</p>
+<a class="back" href="{% url 'web:startup_list' %}">← Startups</a>
+
+<section class="card detail-header">
+  <div>
+    <h1>{{ startup.name }}</h1>
+    {% if startup.website %}<a href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website }}</a>{% endif %}
+    {% if startup.description %}<p class="startup-description">{{ startup.description }}</p>{% endif %}
+    <div class="pills">
+      <span class="pill status-{{ startup.status }}">{{ startup.get_status_display }}</span>
+      {% if startup.openings_state == 'active' %}
+        <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }} activa{{ startup.openings_count|pluralize }}</span>
+      {% endif %}
+      {% if startup.hq_country %}
+        <span class="pill">{{ startup.hq_country|country_name }}{% if startup.hq_timezone %} · {{ startup.hq_timezone|hours_from_madrid }}{% endif %}</span>
+      {% elif startup.location_source == 'remote' %}
+        <span class="pill pill-success">Remoto</span>
+      {% endif %}
+      {% if startup.discard_reason %}<span class="muted">{{ startup.discard_reason }}</span>{% endif %}
+    </div>
+  </div>
+</section>
 
 {% if startup.possible_duplicate_of or possible_duplicates %}
-<p class="message message-warning">
+<p class="message message-warning" style="margin-top: 1rem">
   Posible duplicado:
   {% if startup.possible_duplicate_of %}
     <a href="{% url 'web:duplicate_compare' startup.pk %}">comparar con {{ startup.possible_duplicate_of.name }}</a>
@@ -25,142 +36,161 @@
 </p>
 {% endif %}
 
-<div class="columns">
-  <section>
-    <h2>Estado</h2>
-    <form method="post" action="{% url 'web:startup_status' startup.pk %}" class="stacked">
-      {% csrf_token %}
-      {{ status_form.status }}
-      <input name="note" placeholder="Nota (obligatoria para descartar)" maxlength="255">
-      <button type="submit">Cambiar</button>
-    </form>
-    <form method="post" action="{% url 'web:startup_blacklist' startup.pk %}" class="stacked">
-      {% csrf_token %}
-      <input name="reason" placeholder="Motivo (por defecto: bolsa de trabajo)" maxlength="255">
-      <button type="submit">No es una startup: a la lista negra</button>
-    </form>
-    <h3>Historial</h3>
-    <ul class="plain">
-      {% for change in status_changes %}
-        <li>{{ change.changed_at|date:"d/m/Y H:i" }} · {{ change.get_from_status_display }} → <strong>{{ change.get_to_status_display }}</strong>{% if change.note %} · {{ change.note }}{% endif %}</li>
-      {% empty %}
-        <li class="muted">Sin cambios todavía.</li>
-      {% endfor %}
-    </ul>
-  </section>
-
-  <section>
-    <h2>Datos</h2>
-    <table class="fields">
-      {% for field in merged_fields %}
-        <tr><th>{{ field.label }}</th><td>{{ field.value|default:"—" }}</td><td class="muted">{{ field.source }}</td></tr>
-      {% endfor %}
-    </table>
-    <h3>Ubicación</h3>
-    {% if startup.hq_country %}
-      <p>
-        <strong>{{ startup.hq_country|country_name }}</strong>{% if startup.hq_city %} · {{ startup.hq_city }}{% endif %}
-        {% if startup.hq_timezone %}· {{ startup.hq_timezone }} · {{ startup.hq_timezone|hours_from_madrid }} de Madrid hoy{% endif %}
-        <br><span class="muted">{{ startup.get_location_source_display }}{% if startup.location_evidence %}: {{ startup.location_evidence|truncatechars:200 }}{% endif %}</span>
-      </p>
-    {% elif startup.location_source == 'remote' %}
-      <p>
-        <strong>Remoto, sin país</strong>
-        {% if startup.hq_timezone %}· región más cercana: {{ startup.hq_timezone }} · {{ startup.hq_timezone|hours_from_madrid }} de Madrid hoy{% else %}· cuenta como a menos de 5 h de Madrid{% endif %}
-        <br><span class="muted">{{ startup.get_location_source_display }}{% if startup.location_evidence %}: {{ startup.location_evidence|truncatechars:200 }}{% endif %}</span>
-      </p>
-    {% else %}
-      <p class="muted">País desconocido: no hay dirección, sede, puestos ni dominio de país que lo digan.</p>
-    {% endif %}
-    <form method="post" action="{% url 'web:startup_location' startup.pk %}" class="stacked">
-      {% csrf_token %}
-      {{ location_form.country }}
-      {{ location_form.city }}
-      <button type="submit">Corregir a mano</button>
-    </form>
-    {% if startup.location_source == 'manual' %}
-      <form method="post" action="{% url 'web:startup_location_reset' startup.pk %}">
-        {% csrf_token %}
-        <button type="submit">Volver a la detección automática</button>
-      </form>
-    {% endif %}
-    <h3>Dominios</h3>
-    <p>{% for domain in domains %}{{ domain.domain }}{% if domain.is_primary %} (principal){% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">Sin dominio propio.</span>{% endfor %}</p>
-  </section>
-</div>
-
-<section>
-  <h2>Búsquedas</h2>
-  {% if inspection and inspection.openings_status != 'not_checked' %}
-    <p>
-      <strong>{{ inspection.get_openings_status_display }}</strong>
-      {% if inspection.openings_checked_at %}· verificado el {{ inspection.openings_checked_at|date:"d/m/Y" }}{% endif %}
-      {% if inspection.openings_url %}· <a href="{{ inspection.openings_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.openings_url|truncatechars:60 }}</a>{% endif %}
-    </p>
-  {% endif %}
-  {% if openings %}
-    <table>
-      <thead><tr><th>Puesto</th><th>Ubicación</th><th>País</th><th>Remoto</th><th>Publicado</th><th>Origen</th></tr></thead>
-      <tbody>
-      {% for opening in openings %}
-        <tr>
-          <td>{% if opening.url %}<a href="{{ opening.url }}" target="_blank" rel="noopener noreferrer">{{ opening.title }}</a>{% else %}{{ opening.title }}{% endif %}</td>
-          <td>{{ opening.location|default:"—" }}</td>
-          <td>{{ opening.country|default:"—" }}{% if opening.timezone_name %} · {{ opening.timezone_name|hours_from_madrid }}{% if opening.timezone_name|is_near_madrid %} <span class="near" title="A menos de 5 h de Madrid">&lt;5 h</span>{% endif %}{% endif %}</td>
-          <td>{% if opening.is_remote %}Sí{% elif opening.is_remote is False %}No{% else %}—{% endif %}</td>
-          <td>{{ opening.published_at|date:"d/m/Y"|default:"sin fecha" }}</td>
-          <td>{{ opening.get_origin_display }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  {% endif %}
-  <h3>Señal en la web</h3>
-  {% if inspection %}
-    <p>
-      Web: {{ inspection.get_status_display }}{% if inspection.inspected_at %} el {{ inspection.inspected_at|date:"d/m/Y" }}{% endif %}.
-      {% if inspection.has_hiring_signal %}
-        Señal: <a href="{{ inspection.hiring_signal_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.hiring_signal_text|default:inspection.hiring_signal_url }}</a>
-        <span class="muted">({{ inspection.get_hiring_signal_kind_display }}, {{ inspection.get_hiring_signal_method_display }})</span>
-      {% elif inspection.status == 'done' %}
-        Sin señal en la web.
+<div class="grid-2" style="margin-top: 1rem">
+  <div class="stack">
+    <section class="card">
+      <h2>Búsquedas</h2>
+      {% if inspection and inspection.openings_status != 'not_checked' %}
+        <p class="muted">
+          <strong>{{ inspection.get_openings_status_display }}</strong>
+          {% if inspection.openings_checked_at %}· verificado el {{ inspection.openings_checked_at|date:"d/m/Y" }}{% endif %}
+          {% if inspection.openings_url %}· <a href="{{ inspection.openings_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.openings_url|truncatechars:60 }}</a>{% endif %}
+        </p>
       {% endif %}
-      {% if inspection.error %}<span class="muted">{{ inspection.error|truncatechars:120 }}</span>{% endif %}
-    </p>
-  {% else %}
-    <p class="muted">La web no se inspeccionó (no tiene dominio propio).</p>
-  {% endif %}
-  {% for record in hiring_posts %}
-    <p>Aviso en Who is hiring del {{ record.published_at|date:"d/m/Y" }}: <a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.data.description|truncatechars:140 }}</a></p>
-  {% endfor %}
-</section>
+      {% if openings %}
+        <div class="table-wrap">
+        <table>
+          <thead><tr><th>Puesto</th><th>Ubicación</th><th>País</th><th>Remoto</th><th>Publicado</th><th>Origen</th></tr></thead>
+          <tbody>
+          {% for opening in openings %}
+            <tr>
+              <td>{% if opening.url %}<a href="{{ opening.url }}" target="_blank" rel="noopener noreferrer">{{ opening.title }}</a>{% else %}{{ opening.title }}{% endif %}</td>
+              <td>{{ opening.location|default:"—" }}</td>
+              <td class="nowrap">{{ opening.country|default:"—" }}{% if opening.timezone_name %} · {{ opening.timezone_name|hours_from_madrid }}{% if opening.timezone_name|is_near_madrid %} <span class="pill pill-success near" title="A menos de 5 h de Madrid">&lt;5 h</span>{% endif %}{% endif %}</td>
+              <td>{% if opening.is_remote %}Sí{% elif opening.is_remote is False %}No{% else %}—{% endif %}</td>
+              <td class="nowrap">{{ opening.published_at|date:"d/m/Y"|default:"sin fecha" }}</td>
+              <td>{{ opening.get_origin_display }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        </div>
+      {% endif %}
+      <h3>Señal en la web</h3>
+      {% if inspection %}
+        <p class="muted">
+          Web: {{ inspection.get_status_display }}{% if inspection.inspected_at %} el {{ inspection.inspected_at|date:"d/m/Y" }}{% endif %}.
+          {% if inspection.has_hiring_signal %}
+            Señal: <a href="{{ inspection.hiring_signal_url }}" target="_blank" rel="noopener noreferrer">{{ inspection.hiring_signal_text|default:inspection.hiring_signal_url }}</a>
+            ({{ inspection.get_hiring_signal_kind_display }}, {{ inspection.get_hiring_signal_method_display }})
+          {% elif inspection.status == 'done' %}
+            Sin señal en la web.
+          {% endif %}
+          {% if inspection.error %}{{ inspection.error|truncatechars:120 }}{% endif %}
+        </p>
+      {% else %}
+        <p class="muted">La web no se inspeccionó (no tiene dominio propio).</p>
+      {% endif %}
+      {% for record in hiring_posts %}
+        <p class="muted">Aviso en Who is hiring del {{ record.published_at|date:"d/m/Y" }}: <a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.data.description|truncatechars:140 }}</a></p>
+      {% endfor %}
+    </section>
 
-<div id="contacts">
-  {% include "web/partials/contacts.html" %}
-</div>
+    <div id="contacts" class="card">
+      {% include "web/partials/contacts.html" %}
+    </div>
 
-<section>
-  <h2>Análisis</h2>
-  <p><a class="button" href="{% url 'web:analysis_create' startup.pk %}">Nuevo análisis</a></p>
-  <div id="analyses">
-    {% include "web/partials/analyses.html" %}
+    <section class="card">
+      <div class="card-title">
+        <h2>Análisis</h2>
+        <a class="button primary" href="{% url 'web:analysis_create' startup.pk %}">+ Nuevo análisis</a>
+      </div>
+      <div id="analyses">
+        {% include "web/partials/analyses.html" %}
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Fuentes</h2>
+      <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fuente</th><th>Publicado</th><th>Visto</th><th>Nombre / descripción</th></tr></thead>
+        <tbody>
+        {% for record in source_records %}
+          <tr>
+            <td class="nowrap">{% if record.url %}<a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.source.name }}</a>{% else %}{{ record.source.name }}{% endif %}</td>
+            <td class="nowrap">{{ record.published_at|date:"d/m/Y"|default:"—" }}</td>
+            <td class="nowrap">{{ record.first_seen_at|date:"d/m/Y" }}</td>
+            <td>{{ record.data.name }}{% if record.data.description %} · <span class="muted">{{ record.data.description|truncatechars:140 }}</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </section>
   </div>
-</section>
 
-<section>
-  <h2>Fuentes</h2>
-  <table>
-    <thead><tr><th>Fuente</th><th>Publicado</th><th>Visto</th><th>Nombre / descripción</th></tr></thead>
-    <tbody>
-    {% for record in source_records %}
-      <tr>
-        <td>{% if record.url %}<a href="{{ record.url }}" target="_blank" rel="noopener noreferrer">{{ record.source.name }}</a>{% else %}{{ record.source.name }}{% endif %}</td>
-        <td>{{ record.published_at|date:"d/m/Y"|default:"—" }}</td>
-        <td>{{ record.first_seen_at|date:"d/m/Y" }}</td>
-        <td>{{ record.data.name }}{% if record.data.description %} · <span class="muted">{{ record.data.description|truncatechars:140 }}</span>{% endif %}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</section>
+  <aside class="stack">
+    <section class="card">
+      <h2>Estado</h2>
+      <form method="post" action="{% url 'web:startup_status' startup.pk %}" class="stacked">
+        {% csrf_token %}
+        {{ status_form.status }}
+        <input name="note" placeholder="Nota (obligatoria para descartar)" maxlength="255">
+        <button type="submit" class="primary">Cambiar estado</button>
+      </form>
+      <h3>Historial</h3>
+      <ul class="plain">
+        {% for change in status_changes %}
+          <li>{{ change.changed_at|date:"d/m/Y H:i" }} · {{ change.get_from_status_display }} → <strong>{{ change.get_to_status_display }}</strong>{% if change.note %} · {{ change.note }}{% endif %}</li>
+        {% empty %}
+          <li class="muted">Sin cambios todavía.</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Ubicación</h2>
+      {% if startup.hq_country %}
+        <dl class="key-value">
+          <dt>País</dt><dd>{{ startup.hq_country|country_name }}</dd>
+          {% if startup.hq_city %}<dt>Ciudad</dt><dd>{{ startup.hq_city }}</dd>{% endif %}
+          {% if startup.hq_timezone %}<dt>Zona</dt><dd>{{ startup.hq_timezone }} · {{ startup.hq_timezone|hours_from_madrid }} de Madrid hoy</dd>{% endif %}
+          <dt>Fuente</dt><dd>{{ startup.get_location_source_display }}</dd>
+        </dl>
+        {% if startup.location_evidence %}<p class="muted">{{ startup.location_evidence|truncatechars:200 }}</p>{% endif %}
+      {% elif startup.location_source == 'remote' %}
+        <p><strong>Remoto, sin país</strong></p>
+        <p class="muted">{% if startup.hq_timezone %}Región más cercana: {{ startup.hq_timezone }} · {{ startup.hq_timezone|hours_from_madrid }} de Madrid hoy.{% else %}Cuenta como a menos de 5 h de Madrid.{% endif %}</p>
+        <p class="muted">{{ startup.get_location_source_display }}{% if startup.location_evidence %}: {{ startup.location_evidence|truncatechars:200 }}{% endif %}</p>
+      {% else %}
+        <p class="muted">País desconocido: no hay dirección, sede, puestos ni dominio de país que lo digan.</p>
+      {% endif %}
+      <h3>Corregir a mano</h3>
+      <form method="post" action="{% url 'web:startup_location' startup.pk %}" class="stacked">
+        {% csrf_token %}
+        {{ location_form.country }}
+        {{ location_form.city }}
+        <button type="submit">Corregir</button>
+      </form>
+      {% if startup.location_source == 'manual' %}
+        <form method="post" action="{% url 'web:startup_location_reset' startup.pk %}" style="margin-top: 0.5rem">
+          {% csrf_token %}
+          <button type="submit" class="small">Volver a la detección automática</button>
+        </form>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Datos</h2>
+      <table class="fields">
+        {% for field in merged_fields %}
+          <tr><th>{{ field.label }}</th><td>{{ field.value|default:"—" }} <span class="muted">{{ field.source }}</span></td></tr>
+        {% endfor %}
+      </table>
+      <h3>Dominios</h3>
+      <p>{% for domain in domains %}<span class="pill">{{ domain.domain }}{% if domain.is_primary %} · principal{% endif %}</span> {% empty %}<span class="muted">Sin dominio propio.</span>{% endfor %}</p>
+    </section>
+
+    <section class="card">
+      <h2>¿No es una startup?</h2>
+      <p class="muted">Una bolsa de trabajo o un agregador: va a la lista negra, se descarta y no se vuelve a inspeccionar.</p>
+      <form method="post" action="{% url 'web:startup_blacklist' startup.pk %}" class="stacked">
+        {% csrf_token %}
+        <input name="reason" placeholder="Motivo (por defecto: bolsa de trabajo)" maxlength="255">
+        <button type="submit" class="danger">Mandar a la lista negra</button>
+      </form>
+    </section>
+  </aside>
+</div>
 {% endblock %}

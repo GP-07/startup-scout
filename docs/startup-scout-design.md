@@ -255,6 +255,8 @@ flowchart LR
 - **Alta manual**: pegar una URL.
 - **Fusionar duplicados**: dos fichas lado a lado y confirmar.
 - **Corridas**: últimas corridas por fuente, con vistas, nuevas y errores.
+- **Reglas** (2026-11-24): solo lectura, con las reglas de negocio que filtran startups y puestos (fuentes, búsquedas, puestos, idiomas, países, zona horaria, lista negra). Los valores salen del código y de las tablas, así la página no se desactualiza.
+- **Diseño** (2026-11-24): se rediseñó con la misma pila (plantillas de Django + HTMX + una hoja de estilos), en lugar de pasar a Next o Angular, que sumarían una API, un build y otro contenedor.
 
 Decisiones de la implementación (fase 5):
 - **Acceso**: todas las páginas piden sesión (`LoginRequiredMiddleware`); se entra con el usuario de Django (`createsuperuser`) desde el login del admin.

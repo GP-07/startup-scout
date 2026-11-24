@@ -1,12 +1,12 @@
 {% extends "web/base.html" %}
 {% block title %}Análisis · {{ startup.name }}{% endblock %}
 {% block content %}
-<p><a href="{% url 'web:startup_detail' startup.pk %}">← {{ startup.name }}</a></p>
-<h1>{% if analysis %}Editar análisis{% else %}Nuevo análisis{% endif %}</h1>
+<a class="back" href="{% url 'web:startup_detail' startup.pk %}">← {{ startup.name }}</a>
+<div class="page-header"><h1>{% if analysis %}Editar análisis{% else %}Nuevo análisis{% endif %}</h1></div>
 {% if analysis.is_sent %}<p class="message message-warning">Este análisis ya fue enviado el {{ analysis.sent_at|date:"d/m/Y" }}.</p>{% endif %}
-<form method="post" class="stacked wide">
+<form method="post" class="card stacked wide">
   {% csrf_token %}
   {{ form.as_div }}
-  <button type="submit">Guardar</button>
+  <div><button type="submit" class="primary">Guardar</button></div>
 </form>
 {% endblock %}

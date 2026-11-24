@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import markdown as markdown_library
 import nh3
 from django import template
+from django.contrib.staticfiles import finders
+from django.templatetags.static import static
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 
@@ -11,6 +15,7 @@ from web.constants import (
     MARKDOWN_EXTENSIONS,
     MINUS_SIGN,
     OPENINGS_PER_ROW,
+    STATIC_VERSION_PARAMETER,
 )
 
 register = template.Library()
@@ -55,6 +60,16 @@ def is_near_madrid(timezone_name):
 @register.filter
 def country_name(code):
     return locations.country_name(code)
+
+
+@register.simple_tag
+def versioned_static(path):
+    """The static file's URL with its modification time, so browsers never keep an old copy."""
+    url = static(path)
+    file_path = finders.find(path)
+    if not file_path:
+        return url
+    return f"{url}?{STATIC_VERSION_PARAMETER}={int(Path(file_path).stat().st_mtime)}"
 
 
 @register.simple_tag

@@ -1,8 +1,8 @@
 {% extends "web/base.html" %}
 {% block title %}Comparar duplicados · startup-scout{% endblock %}
 {% block content %}
-<p><a href="{% url 'web:duplicate_list' %}">← Duplicados</a></p>
-<h1>¿Son la misma startup?</h1>
+<a class="back" href="{% url 'web:duplicate_list' %}">← Duplicados</a>
+<div class="page-header"><h1>¿Son la misma startup?</h1></div>
 <div class="columns">
   {% for item in pair %}
   <section class="card">
@@ -15,12 +15,12 @@
     <form method="post" action="{% url 'web:duplicate_merge' flagged.pk %}">
       {% csrf_token %}
       <input type="hidden" name="keep" value="{{ item.startup.pk }}">
-      <button type="submit">Fusionar conservando esta</button>
+      <button type="submit" class="primary">Fusionar conservando esta</button>
     </form>
   </section>
   {% endfor %}
 </div>
-<form method="post" action="{% url 'web:duplicate_dismiss' flagged.pk %}">
+<form method="post" action="{% url 'web:duplicate_dismiss' flagged.pk %}" style="margin-top: 1rem">
   {% csrf_token %}
   <button type="submit">No son la misma</button>
 </form>

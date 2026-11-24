@@ -120,6 +120,7 @@ docker compose run --rm web ruff check .
 - [x] Phase 5c — headquarters country and time difference from Madrid, with a filter
 - [x] Phase 5d — only the software roles looked for, without other languages; the rest is
   discarded
+- [x] Phase 5e — redesigned web UI and a read-only business rules page
 
 ## License
 

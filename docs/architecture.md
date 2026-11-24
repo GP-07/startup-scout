@@ -504,7 +504,7 @@ Todos los cambios son manuales, salvo el paso a `contacted` al marcar un anális
 
 ## 6. Web (fase 5)
 
-Django templates con HTMX (cargado desde unpkg, versión fija). Todas las páginas piden sesión (`LoginRequiredMiddleware`, login del admin). Las vistas solo validan formularios y llaman a los servicios de §3.14.
+Django templates con HTMX (cargado desde unpkg, versión fija) y una sola hoja de estilos propia (`web/static/web/style.css`), sin paso de build: tarjetas, pills de estado y barra superior con la sección activa. Se evaluó pasar a Next/React o Angular y se descartó: sumaría una API, un build de Node, un segundo contenedor y otro manejo de sesión para lo mismo que hoy resuelven las plantillas. Todas las páginas piden sesión (`LoginRequiredMiddleware`, login del admin). Las vistas solo validan formularios y llaman a los servicios de §3.14.
 
 | Página | URL | Qué hace |
 |---|---|---|
@@ -513,6 +513,7 @@ Django templates con HTMX (cargado desde unpkg, versión fija). Todas las págin
 | Análisis | `/startups/<id>/analyses/new/`, `/analyses/<id>/edit/` | Formulario con título y Markdown. En la ficha: marcar como enviado (fecha y contacto), desmarcar y eliminar con confirmación (avisa si ya estaba enviado). Al marcar como enviado la página se recarga, porque cambia el estado |
 | Alta manual | `/startups/new/` | Pegar una URL. Si ya existía, lleva a su ficha |
 | Duplicados | `/duplicates/`, `/duplicates/<id>/` | Lista de posibles duplicados, comparación lado a lado, fusionar eligiendo cuál conservar o marcar que son distintas |
+| Reglas | `/rules/` | Solo lectura: las reglas de negocio con los valores que usa el código (`web/rules.py` los lee de las constantes y las tablas, no los copia): fuentes activas y descartadas, antigüedad de las búsquedas, puestos que busco y especialidades descartadas, idiomas, países y patrocinio de visa, sede y zona horaria, lista negra y plataformas |
 | Corridas | `/runs/` | Últimas 20 corridas de cada fuente, con vistas, nuevas y errores |
 
 Las respuestas 400 de validación también se insertan en la página (configuración `htmx-config` en `base.html`), así los formularios muestran sus errores.

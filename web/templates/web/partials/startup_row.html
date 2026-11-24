@@ -1,46 +1,49 @@
 {% load web_tags %}
-<tr id="startup-{{ startup.pk }}" class="{% if startup.status == 'discarded' %}discarded{% endif %}">
-  <td>
-    <a href="{% url 'web:startup_detail' startup.pk %}"><strong>{{ startup.name }}</strong></a>
-    {% if startup.website %}<br><a class="muted" href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website|truncatechars:50 }}</a>{% endif %}
-    {% if startup.description %}<br><span class="muted">{{ startup.description|truncatechars:110 }}</span>{% endif %}
-  </td>
-  <td class="location">
-    {% if startup.hq_country %}
-      <span title="{{ startup.hq_city|default:startup.hq_country }} · {{ startup.get_location_source_display }}">{{ startup.hq_country }}{% if startup.hq_timezone %} · {{ startup.hq_timezone|hours_from_madrid }}{% endif %}</span>
-    {% elif startup.location_source == 'remote' %}
-      <span title="{{ startup.get_location_source_display }}">Remoto · {% if startup.hq_timezone %}{{ startup.hq_timezone|hours_from_madrid }}{% else %}&lt;5 h{% endif %}</span>
-    {% else %}
-      <span class="muted">País desconocido</span>
-    {% endif %}
-  </td>
-  <td>
+<article id="startup-{{ startup.pk }}" class="startup-card{% if startup.status == 'discarded' %} discarded{% endif %}">
+  <div>
+    <a class="startup-name" href="{% url 'web:startup_detail' startup.pk %}">{{ startup.name }}</a>
+    {% if startup.website %}<a class="startup-site" href="{{ startup.website }}" target="_blank" rel="noopener noreferrer">{{ startup.website }}</a>{% endif %}
+    {% if startup.description %}<p class="startup-description">{{ startup.description|truncatechars:140 }}</p>{% endif %}
+    <p class="muted">{{ startup|source_names }} · vista el {{ startup.first_seen_at|date:"d/m/Y" }}</p>
+  </div>
+  <div>
     {% if startup.openings_state == 'active' %}
       <span class="badge badge-hiring">{{ startup.openings_count }} búsqueda{{ startup.openings_count|pluralize }}</span>
       <ul class="openings">
         {% for opening in startup|first_openings %}
-          <li>{{ opening.title|truncatechars:60 }}{% if opening.is_remote %} · <em>remoto</em>{% endif %}{% if opening.timezone_name|is_near_madrid %} · <span class="near" title="A menos de 5 h de Madrid">{{ opening.country|default:"región" }} · &lt;5 h</span>{% elif opening.country %} · <span class="muted">{{ opening.country }}</span>{% endif %}</li>
+          <li>{{ opening.title|truncatechars:60 }}{% if opening.is_remote %} <span class="pill">remoto</span>{% endif %}{% if opening.timezone_name|is_near_madrid %} <span class="pill pill-success near" title="A menos de 5 h de Madrid">{{ opening.country|default:"región" }} · &lt;5 h</span>{% elif opening.country %} <span class="pill">{{ opening.country }}</span>{% endif %}</li>
         {% endfor %}
       </ul>
     {% elif startup.openings_state == 'unverified' %}
-      <span class="badge">Señal sin verificar</span>
+      <span class="badge pill-warning">Señal sin verificar</span>
     {% elif startup.openings_state == 'none' %}
       <span class="badge badge-muted">Sin búsquedas activas</span>
+    {% else %}
+      <span class="badge badge-muted">Sin señal</span>
     {% endif %}
-  </td>
-  <td>{{ startup.get_status_display }}</td>
-  <td>{{ startup|source_names }}</td>
-  <td>{% if startup.has_key_contact %}✓{% endif %}</td>
-  <td>{{ startup.first_seen_at|date:"d/m/Y" }}</td>
-  <td>
+  </div>
+  <div class="startup-meta">
+    <div class="pills">
+      <span class="pill status-{{ startup.status }}">{{ startup.get_status_display }}</span>
+      {% if startup.has_key_contact %}<span class="pill pill-accent" title="Tiene CEO, CTO, founder o mail general">✓ contacto</span>{% endif %}
+    </div>
+    <div class="location">
+      {% if startup.hq_country %}
+        <span class="pill" title="{{ startup.hq_city|default:startup.hq_country }} · {{ startup.get_location_source_display }}">{{ startup.hq_country }}{% if startup.hq_timezone %} · {{ startup.hq_timezone|hours_from_madrid }}{% endif %}</span>
+      {% elif startup.location_source == 'remote' %}
+        <span class="pill pill-success" title="{{ startup.get_location_source_display }}">Remoto · {% if startup.hq_timezone %}{{ startup.hq_timezone|hours_from_madrid }}{% else %}&lt;5 h{% endif %}</span>
+      {% else %}
+        <span class="pill badge-muted">País desconocido</span>
+      {% endif %}
+    </div>
     {% if startup.status == 'discarded' %}
       <span class="muted">{{ startup.discard_reason }}</span>
     {% else %}
       <form class="discard" hx-post="{% url 'web:startup_discard' startup.pk %}" hx-target="#startup-{{ startup.pk }}" hx-swap="outerHTML">
-        <input name="reason" placeholder="Motivo" required maxlength="255">
-        <button type="submit">Descartar</button>
-        {% if discard_error %}<span class="error">{{ discard_error }}</span>{% endif %}
+        <input name="reason" placeholder="Motivo para descartar" required maxlength="255">
+        <button type="submit" class="small danger">Descartar</button>
       </form>
+      {% if discard_error %}<span class="error">{{ discard_error }}</span>{% endif %}
     {% endif %}
-  </td>
-</tr>
+  </div>
+</article>

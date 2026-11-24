@@ -72,4 +72,5 @@ CONTACT_WITHOUT_CHANNEL_MESSAGE = "Cargá al menos un mail o un perfil."
 UNKNOWN_COUNTRY_MESSAGE = "Elegí un país de la lista."
 # Contacts in a startup: confirmed first, rejected last; within each, the strongest role first.
 CONTACT_STATUS_ORDER = (ContactStatus.CONFIRMED, ContactStatus.CANDIDATE, ContactStatus.REJECTED)
+STATIC_VERSION_PARAMETER = "v"
 HTMX_SCRIPT_URL = "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"

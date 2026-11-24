@@ -1,0 +1,39 @@
+{% extends "web/base.html" %}
+{% block title %}Reglas · startup-scout{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Reglas de negocio</h1>
+    <p class="subtitle">Cómo se eligen las startups y los puestos. Solo lectura: los valores salen del mismo código y de las mismas tablas que usa el proceso.</p>
+  </div>
+</div>
+<div class="rules-layout">
+  <nav class="rules-toc">
+    {% for section in sections %}<a href="#{{ section.slug }}">{{ section.title }}</a>{% endfor %}
+  </nav>
+  <div class="stack">
+    {% for section in sections %}
+    <section class="card rule-section" id="{{ section.slug }}">
+      <h2>{{ section.title }}</h2>
+      <p class="intro">{{ section.intro }}</p>
+      {% for group in section.groups %}
+      <div class="rule-group">
+        <h3>{{ group.label }}</h3>
+        {% if group.text %}<p>{{ group.text }}</p>{% endif %}
+        {% if group.values %}
+          {% if group.folded %}
+            <details>
+              <summary>Ver {{ group.values|length }}</summary>
+              <div class="chips">{% for value in group.values %}<span class="chip">{{ value }}</span>{% endfor %}</div>
+            </details>
+          {% else %}
+            <div class="chips">{% for value in group.values %}<span class="chip">{{ value }}</span>{% endfor %}</div>
+          {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
